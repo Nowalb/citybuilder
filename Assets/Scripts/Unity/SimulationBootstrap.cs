@@ -5,7 +5,7 @@ using UnityEngine;
 namespace CityBuilder.Unity
 {
     /// <summary>
-    /// Unity adapter: drives simulation tick, world picking, and visual sync.
+    /// Unity adapter: drives simulation tick, auto-growth and visual sync.
     /// </summary>
     public sealed class SimulationBootstrap : MonoBehaviour
     {
@@ -13,23 +13,32 @@ namespace CityBuilder.Unity
         [SerializeField] private int width = 50;
         [SerializeField] private int height = 50;
         [SerializeField] private float hexSize = 1f;
+        [SerializeField] private int terrainSeed = 1337;
+        [SerializeField, Range(0f, 0.45f)] private float waterThreshold = 0.12f;
 
         [Header("Simulation")]
         [SerializeField] private float tickIntervalSeconds = 1f;
         [SerializeField] private int maxCitizenDots = 300;
+
+        [Header("Auto Growth")]
+        [SerializeField] private int roadsPerTick = 3;
+        [SerializeField] private int buildingsPerTick = 2;
+        [SerializeField] private int buildingRoadSearchRadius = 2;
 
         [Header("References")]
         [SerializeField] private HexGridRenderer hexGridRenderer;
 
         private GridSystem _grid;
         private CitySimulation _simulation;
+        private Camera _mainCamera;
+
         private readonly Dictionary<Building, GameObject> _buildingViews = new();
         private readonly Dictionary<Citizen, GameObject> _citizenViews = new();
-        private Camera _mainCamera;
+        private readonly List<HexCoord> _roadCoords = new();
+
         private float _elapsed;
 
         public GridSystem Grid => _grid;
-
 
         private void OnValidate()
         {
@@ -38,7 +47,11 @@ namespace CityBuilder.Unity
             hexSize = Mathf.Max(0.1f, hexSize);
             tickIntervalSeconds = Mathf.Max(0.1f, tickIntervalSeconds);
             maxCitizenDots = Mathf.Max(1, maxCitizenDots);
+            roadsPerTick = Mathf.Max(1, roadsPerTick);
+            buildingsPerTick = Mathf.Max(0, buildingsPerTick);
+            buildingRoadSearchRadius = Mathf.Clamp(buildingRoadSearchRadius, 1, 8);
         }
+
         private void Awake()
         {
             if (hexGridRenderer == null)
@@ -55,10 +68,9 @@ namespace CityBuilder.Unity
         private void Start()
         {
             _mainCamera = Camera.main;
-            _grid = new GridSystem(width, height);
+            _grid = new GridSystem(width, height, terrainSeed, waterThreshold);
             _simulation = new CitySimulation(_grid);
 
-            GenerateRoadNetwork();
             hexGridRenderer.Initialize(_grid, hexSize);
             RefreshViews();
             RunTick();
@@ -70,6 +82,8 @@ namespace CityBuilder.Unity
             while (_elapsed >= tickIntervalSeconds)
             {
                 _elapsed -= tickIntervalSeconds;
+
+                RunAutoGrowthStep();
                 RunTick();
                 RefreshViews();
             }
@@ -110,8 +124,9 @@ namespace CityBuilder.Unity
             var ok = _grid.PlaceRoad(coord);
             if (ok)
             {
+                RegisterRoad(coord);
                 var tile = _grid.GetTile(coord);
-                hexGridRenderer.RefreshTile(coord, tile != null && tile.IsRoad);
+                hexGridRenderer.RefreshTile(tile);
             }
 
             return ok;
@@ -128,35 +143,131 @@ namespace CityBuilder.Unity
             RefreshCitizenViews();
         }
 
-        private void GenerateRoadNetwork()
+        private void RunAutoGrowthStep()
         {
-            for (var q = 0; q < width; q++)
-            {
-                PlaceRoad(new HexCoord(q, 0));
-                PlaceRoad(new HexCoord(q, height - 1));
-            }
+            EnsureSeedRoad();
 
-            for (var r = 0; r < height; r++)
-            {
-                PlaceRoad(new HexCoord(0, r));
-                PlaceRoad(new HexCoord(width - 1, r));
-            }
+            var placedRoads = 0;
+            var safety = 0;
 
-            for (var q = 0; q < width; q += 5)
+            while (placedRoads < roadsPerTick && safety < 400)
             {
-                for (var r = 0; r < height; r++)
+                safety++;
+                if (_roadCoords.Count == 0)
                 {
-                    PlaceRoad(new HexCoord(q, r));
+                    break;
+                }
+
+                var source = _roadCoords[Random.Range(0, _roadCoords.Count)];
+                var neighbors = source.GetNeighbors();
+                foreach (var target in neighbors)
+                {
+                    if (!_grid.Contains(target))
+                    {
+                        continue;
+                    }
+
+                    var tile = _grid.GetTile(target);
+                    if (tile == null || !tile.IsBuildableTerrain || tile.IsRoad || tile.HasBuilding)
+                    {
+                        continue;
+                    }
+
+                    if (Random.value > 0.35f)
+                    {
+                        continue;
+                    }
+
+                    if (PlaceRoad(target))
+                    {
+                        placedRoads++;
+                        break;
+                    }
                 }
             }
 
-            for (var r = 0; r < height; r += 5)
+            var placedBuildings = 0;
+            safety = 0;
+
+            while (placedBuildings < buildingsPerTick && safety < 500)
             {
-                for (var q = 0; q < width; q++)
+                safety++;
+                if (_roadCoords.Count == 0)
                 {
-                    PlaceRoad(new HexCoord(q, r));
+                    break;
+                }
+
+                var road = _roadCoords[Random.Range(0, _roadCoords.Count)];
+                var candidates = _grid.GetTilesInRange(road, buildingRoadSearchRadius);
+                for (var i = 0; i < candidates.Count && placedBuildings < buildingsPerTick; i++)
+                {
+                    var tile = candidates[i];
+                    if (tile == null || tile.IsRoad || tile.HasBuilding || !tile.IsBuildableTerrain)
+                    {
+                        continue;
+                    }
+
+                    if (!_grid.HasAdjacentRoad(tile.Coord))
+                    {
+                        continue;
+                    }
+
+                    if (Random.value > 0.25f)
+                    {
+                        continue;
+                    }
+
+                    if (PlaceBuilding(tile.Coord, ResolveAutoBuildingType()))
+                    {
+                        placedBuildings++;
+                    }
                 }
             }
+        }
+
+        private void EnsureSeedRoad()
+        {
+            if (_roadCoords.Count > 0)
+            {
+                return;
+            }
+
+            var center = new HexCoord(width / 2, height / 2);
+            if (!PlaceRoad(center))
+            {
+                // Find first non-water tile if center is blocked.
+                foreach (var tile in _grid.Tiles)
+                {
+                    if (tile.IsBuildableTerrain && PlaceRoad(tile.Coord))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void RegisterRoad(HexCoord coord)
+        {
+            for (var i = 0; i < _roadCoords.Count; i++)
+            {
+                if (_roadCoords[i].Equals(coord))
+                {
+                    return;
+                }
+            }
+
+            _roadCoords.Add(coord);
+        }
+
+        private static BuildingType ResolveAutoBuildingType()
+        {
+            var value = Random.Range(0, 100);
+            if (value < 42) return BuildingType.Residential;
+            if (value < 62) return BuildingType.Industrial;
+            if (value < 82) return BuildingType.Commercial;
+            if (value < 89) return BuildingType.PoliceStation;
+            if (value < 95) return BuildingType.FireStation;
+            return BuildingType.Hospital;
         }
 
         private void RefreshBuildingViews()
@@ -243,7 +354,7 @@ namespace CityBuilder.Unity
             _simulation.Tick();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log(
-                $"Tick {_simulation.TickCount} | Buildings: {_grid.Buildings.Count} | Residents: {_simulation.TotalResidents} | Jobs: {_simulation.TotalJobs} | " +
+                $"Tick {_simulation.TickCount} | Roads: {_roadCoords.Count} | Buildings: {_grid.Buildings.Count} | Residents: {_simulation.TotalResidents} | Jobs: {_simulation.TotalJobs} | " +
                 $"Crime: {_simulation.CrimeIndex:0.0} | FireRisk: {_simulation.FireRiskIndex:0.0} | Health: {_simulation.HealthIndex:0.0} | " +
                 $"Citizens: {_simulation.Citizens.Count} | Balance: {_simulation.Balance}");
 #endif

@@ -30,7 +30,7 @@ namespace CityBuilder.Simulation
         public IReadOnlyList<Building> Buildings => _buildings;
         public IReadOnlyList<BuildingPlacement> Placements => _placements;
 
-        public GridSystem(int width = 50, int height = 50)
+        public GridSystem(int width = 50, int height = 50, int terrainSeed = 1337, float waterThreshold = 0.12f)
         {
             Width = width;
             Height = height;
@@ -43,7 +43,8 @@ namespace CityBuilder.Simulation
                 for (var r = 0; r < Height; r++)
                 {
                     var coord = new HexCoord(q, r);
-                    _tiles[coord] = new Tile(coord);
+                    var terrain = ResolveTerrain(coord, terrainSeed, waterThreshold);
+                    _tiles[coord] = new Tile(coord, terrain);
                 }
             }
         }
@@ -148,7 +149,35 @@ namespace CityBuilder.Simulation
         private bool IsBuildableTile(HexCoord coord)
         {
             var tile = GetTile(coord);
-            return tile != null && !tile.IsRoad && !tile.HasBuilding;
+            return tile != null && tile.IsBuildableTerrain && !tile.IsRoad && !tile.HasBuilding;
+        }
+
+        private static TerrainType ResolveTerrain(HexCoord coord, int seed, float waterThreshold)
+        {
+            var n = Noise01(coord.Q, coord.R, seed);
+            if (n < waterThreshold)
+            {
+                return TerrainType.Water;
+            }
+
+            if (n > 0.78f)
+            {
+                return TerrainType.Hill;
+            }
+
+            if (n > 0.52f)
+            {
+                return TerrainType.Forest;
+            }
+
+            return TerrainType.Grass;
+        }
+
+        private static float Noise01(int q, int r, int seed)
+        {
+            var value = Math.Sin((q * 12.9898 + r * 78.233 + seed * 0.1234) * 0.35) * 43758.5453;
+            var frac = value - Math.Floor(value);
+            return (float)(frac < 0 ? frac + 1.0 : frac);
         }
     }
 }

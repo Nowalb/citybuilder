@@ -5,18 +5,20 @@ using UnityEngine;
 namespace CityBuilder.Unity
 {
     /// <summary>
-    /// Renders simulation hex tiles using a shared procedural mesh/material setup.
+    /// Renders simulation hex tiles using shared procedural mesh/materials.
     /// </summary>
     public sealed class HexGridRenderer : MonoBehaviour
     {
         [SerializeField] private Material roadMaterial;
-        [SerializeField] private Material groundMaterial;
+        [SerializeField] private Material grassMaterial;
+        [SerializeField] private Material forestMaterial;
+        [SerializeField] private Material hillMaterial;
+        [SerializeField] private Material waterMaterial;
 
         private readonly Dictionary<HexCoord, MeshRenderer> _tileRenderers = new();
+        private readonly Dictionary<TerrainType, Material> _fallbackTerrainMaterials = new();
         private Mesh _sharedHexMesh;
         private Transform _container;
-        private Material _fallbackRoadMaterial;
-        private Material _fallbackGroundMaterial;
 
         public void Initialize(GridSystem grid, float hexSize)
         {
@@ -27,8 +29,8 @@ namespace CityBuilder.Unity
             }
 
             Cleanup();
-
             _sharedHexMesh = CreatePointyTopHexMesh(hexSize);
+
             _container = new GameObject("HexGridRoot").transform;
             _container.SetParent(transform, false);
 
@@ -44,40 +46,62 @@ namespace CityBuilder.Unity
 
                 meshFilter.sharedMesh = _sharedHexMesh;
                 meshCollider.sharedMesh = _sharedHexMesh;
-                meshRenderer.sharedMaterial = ResolveTileMaterial(tile.IsRoad);
+                meshRenderer.sharedMaterial = ResolveTileMaterial(tile);
 
                 _tileRenderers[tile.Coord] = meshRenderer;
             }
         }
 
-        public void RefreshTile(HexCoord coord, bool isRoad)
+        public void RefreshTile(Tile tile)
         {
-            if (_tileRenderers.TryGetValue(coord, out var renderer))
+            if (tile == null)
             {
-                renderer.sharedMaterial = ResolveTileMaterial(isRoad);
+                return;
+            }
+
+            if (_tileRenderers.TryGetValue(tile.Coord, out var renderer))
+            {
+                renderer.sharedMaterial = ResolveTileMaterial(tile);
             }
         }
 
-        private Material ResolveTileMaterial(bool isRoad)
+        private Material ResolveTileMaterial(Tile tile)
         {
-            if (isRoad)
+            if (tile.IsRoad)
             {
-                if (roadMaterial != null) return roadMaterial;
-                if (_fallbackRoadMaterial == null)
+                if (roadMaterial != null)
                 {
-                    _fallbackRoadMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = Color.gray };
+                    return roadMaterial;
                 }
 
-                return _fallbackRoadMaterial;
+                return GetOrCreateFallback(TerrainType.Hill, Color.gray);
             }
 
-            if (groundMaterial != null) return groundMaterial;
-            if (_fallbackGroundMaterial == null)
+            return tile.TerrainType switch
             {
-                _fallbackGroundMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = new Color(0.22f, 0.24f, 0.22f) };
+                TerrainType.Grass when grassMaterial != null => grassMaterial,
+                TerrainType.Forest when forestMaterial != null => forestMaterial,
+                TerrainType.Hill when hillMaterial != null => hillMaterial,
+                TerrainType.Water when waterMaterial != null => waterMaterial,
+                TerrainType.Grass => GetOrCreateFallback(TerrainType.Grass, new Color(0.20f, 0.45f, 0.20f)),
+                TerrainType.Forest => GetOrCreateFallback(TerrainType.Forest, new Color(0.10f, 0.32f, 0.14f)),
+                TerrainType.Hill => GetOrCreateFallback(TerrainType.Hill, new Color(0.42f, 0.35f, 0.24f)),
+                TerrainType.Water => GetOrCreateFallback(TerrainType.Water, new Color(0.10f, 0.24f, 0.55f)),
+                _ => GetOrCreateFallback(TerrainType.Grass, new Color(0.20f, 0.45f, 0.20f))
+            };
+        }
+
+        private Material GetOrCreateFallback(TerrainType terrainType, Color color)
+        {
+            if (_fallbackTerrainMaterials.TryGetValue(terrainType, out var material))
+            {
+                return material;
             }
 
-            return _fallbackGroundMaterial;
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Sprites/Default");
+            material = new Material(shader) { color = color };
+            _fallbackTerrainMaterials[terrainType] = material;
+            return material;
         }
 
         private static Mesh CreatePointyTopHexMesh(float size)
@@ -112,6 +136,7 @@ namespace CityBuilder.Unity
         private void Cleanup()
         {
             _tileRenderers.Clear();
+
             if (_container != null)
             {
                 Destroy(_container.gameObject);
@@ -119,8 +144,7 @@ namespace CityBuilder.Unity
             }
 
             _sharedHexMesh = null;
-            _fallbackRoadMaterial = null;
-            _fallbackGroundMaterial = null;
+            _fallbackTerrainMaterials.Clear();
         }
     }
 }

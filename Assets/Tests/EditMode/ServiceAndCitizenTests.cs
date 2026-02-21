@@ -9,7 +9,7 @@ namespace CityBuilder.Tests.EditMode
         [Test]
         public void Tick_ComputesSafetyAndHealthIndicators()
         {
-            var grid = new GridSystem(20, 20);
+            var grid = new GridSystem(20, 20, terrainSeed: 1, waterThreshold: 0f);
 
             for (var q = 0; q < 20; q++)
             {
@@ -35,7 +35,7 @@ namespace CityBuilder.Tests.EditMode
         [Test]
         public void Citizens_MoveOnRoadTilesOnly()
         {
-            var grid = new GridSystem(20, 20);
+            var grid = new GridSystem(20, 20, terrainSeed: 1, waterThreshold: 0f);
             for (var q = 0; q < 20; q++)
             {
                 grid.PlaceRoad(new HexCoord(q, 5));

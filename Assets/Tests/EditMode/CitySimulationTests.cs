@@ -8,7 +8,7 @@ namespace CityBuilder.Tests.EditMode
         [Test]
         public void Tick_CalculatesPopulationJobsAndEconomy()
         {
-            var grid = new GridSystem(10, 10);
+            var grid = new GridSystem(10, 10, terrainSeed: 1, waterThreshold: 0f);
             grid.PlaceRoad(new HexCoord(2, 1));
             grid.PlaceRoad(new HexCoord(3, 2));
             grid.PlaceBuilding(new HexCoord(2, 2), BuildingType.Residential);
