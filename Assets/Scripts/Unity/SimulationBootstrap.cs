@@ -5,10 +5,21 @@ using UnityEngine;
 namespace CityBuilder.Unity
 {
     /// <summary>
-    /// Unity adapter: drives simulation and runtime visualization.
+    /// Unity adapter: drives simulation, rendering and manual city-builder placement tools.
     /// </summary>
     public sealed class SimulationBootstrap : MonoBehaviour
     {
+        private enum BuildTool
+        {
+            Road,
+            Residential,
+            Industrial,
+            Commercial,
+            PoliceStation,
+            FireStation,
+            Hospital
+        }
+
         [Header("Grid")]
         [SerializeField] private int width = 50;
         [SerializeField] private int height = 50;
@@ -16,7 +27,6 @@ namespace CityBuilder.Unity
 
         [Header("Simulation")]
         [SerializeField] private float tickIntervalSeconds = 1f;
-        [SerializeField] private int buildingsPlacedPerTick = 120;
 
         [Header("Citizens")]
         [SerializeField] private int maxCitizenDots = 300;
@@ -25,8 +35,10 @@ namespace CityBuilder.Unity
         private CitySimulation _simulation;
         private readonly Dictionary<Building, GameObject> _buildingViews = new();
         private readonly Dictionary<Citizen, GameObject> _citizenViews = new();
+        private readonly Dictionary<GameObject, Vector2Int> _tilePositionsByView = new();
+
+        private BuildTool _activeTool = BuildTool.Road;
         private float _elapsed;
-        private int _placementCursor;
 
         private void Start()
         {
@@ -35,21 +47,61 @@ namespace CityBuilder.Unity
 
             GenerateRoadNetwork();
             GenerateTileViews();
+            RefreshBuildingViews();
+            RefreshCitizenViews();
             RunTick();
         }
 
         private void Update()
         {
-            _elapsed += Time.deltaTime;
+            HandlePlacementInput();
 
+            _elapsed += Time.deltaTime;
             while (_elapsed >= tickIntervalSeconds)
             {
                 _elapsed -= tickIntervalSeconds;
-                FillCityStep();
                 RunTick();
                 RefreshBuildingViews();
                 RefreshCitizenViews();
             }
+        }
+
+        private void HandlePlacementInput()
+        {
+            if (!IsPlacePressed())
+            {
+                return;
+            }
+
+            if (!TryGetHoveredTilePosition(out var position))
+            {
+                return;
+            }
+
+            var success = _activeTool == BuildTool.Road
+                ? _grid.PlaceRoad(position.x, position.y)
+                : _grid.PlaceBuilding(position.x, position.y, ConvertToolToBuildingType(_activeTool));
+
+            if (!success)
+            {
+                return;
+            }
+
+            UpdateTileColor(position.x, position.y);
+            RefreshBuildingViews();
+        }
+
+        private bool TryGetHoveredTilePosition(out Vector2Int tilePosition)
+        {
+            tilePosition = default;
+            var ray = Camera.main.ScreenPointToRay(GetPointerScreenPosition());
+
+            if (!Physics.Raycast(ray, out var hit, 500f))
+            {
+                return false;
+            }
+
+            return _tilePositionsByView.TryGetValue(hit.collider.gameObject, out tilePosition);
         }
 
         private void GenerateRoadNetwork()
@@ -83,47 +135,6 @@ namespace CityBuilder.Unity
             }
         }
 
-        private void FillCityStep()
-        {
-            var placed = 0;
-            var maxTiles = width * height;
-            var scanned = 0;
-
-            while (placed < buildingsPlacedPerTick && scanned < maxTiles)
-            {
-                var index = _placementCursor % maxTiles;
-                var x = index % width;
-                var y = index / width;
-
-                var tile = _grid.GetTile(x, y);
-                if (tile != null && !tile.IsRoad && !tile.HasBuilding)
-                {
-                    var type = ResolveBuildingType(x, y);
-                    if (_grid.PlaceBuilding(x, y, type))
-                    {
-                        placed++;
-                    }
-                }
-
-                _placementCursor++;
-                scanned++;
-            }
-        }
-
-        private static BuildingType ResolveBuildingType(int x, int y)
-        {
-            var value = (x + y) % 10;
-            return value switch
-            {
-                0 => BuildingType.PoliceStation,
-                1 => BuildingType.FireStation,
-                2 => BuildingType.Hospital,
-                3 or 4 => BuildingType.Commercial,
-                5 or 6 => BuildingType.Industrial,
-                _ => BuildingType.Residential
-            };
-        }
-
         private void GenerateTileViews()
         {
             var root = new GameObject("GridRoot");
@@ -140,10 +151,25 @@ namespace CityBuilder.Unity
                     tile.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
                     tile.transform.localScale = Vector3.one * tileSize;
 
-                    var renderer = tile.GetComponent<Renderer>();
-                    var simTile = _grid.GetTile(x, y);
-                    renderer.material.color = simTile != null && simTile.IsRoad ? Color.gray : new Color(0.22f, 0.24f, 0.22f);
+                    _tilePositionsByView.Add(tile, new Vector2Int(x, y));
+                    UpdateTileColor(x, y);
                 }
+            }
+        }
+
+        private void UpdateTileColor(int x, int y)
+        {
+            foreach (var kv in _tilePositionsByView)
+            {
+                if (kv.Value.x != x || kv.Value.y != y)
+                {
+                    continue;
+                }
+
+                var tile = _grid.GetTile(x, y);
+                var renderer = kv.Key.GetComponent<Renderer>();
+                renderer.material.color = tile != null && tile.IsRoad ? Color.gray : new Color(0.22f, 0.24f, 0.22f);
+                return;
             }
         }
 
@@ -209,17 +235,66 @@ namespace CityBuilder.Unity
             }
         }
 
+        private void OnGUI()
+        {
+            GUILayout.BeginArea(new Rect(10, 10, 610, 90), "Build Menu", GUI.skin.window);
+            GUILayout.Label($"Active tool: {_activeTool}");
+            GUILayout.BeginHorizontal();
+
+            DrawToolButton("Road", BuildTool.Road);
+            DrawToolButton("Residential", BuildTool.Residential);
+            DrawToolButton("Industrial", BuildTool.Industrial);
+            DrawToolButton("Commercial", BuildTool.Commercial);
+            DrawToolButton("Police", BuildTool.PoliceStation);
+            DrawToolButton("Fire", BuildTool.FireStation);
+            DrawToolButton("Hospital", BuildTool.Hospital);
+
+            GUILayout.EndHorizontal();
+            GUILayout.Label("LPM: place selected tool on tile. Buildings require adjacent road.");
+            GUILayout.EndArea();
+        }
+
+        private void DrawToolButton(string label, BuildTool tool)
+        {
+            var previousColor = GUI.backgroundColor;
+            if (_activeTool == tool)
+            {
+                GUI.backgroundColor = Color.cyan;
+            }
+
+            if (GUILayout.Button(label, GUILayout.Height(30)))
+            {
+                _activeTool = tool;
+            }
+
+            GUI.backgroundColor = previousColor;
+        }
+
         private static Color ResolveBuildingColor(BuildingType type)
         {
             return type switch
             {
-                BuildingType.Residential => Color.green,     // domy
-                BuildingType.Industrial => Color.yellow,     // firmy
-                BuildingType.Commercial => Color.blue,       // komercyjne
+                BuildingType.Residential => Color.green,
+                BuildingType.Industrial => Color.yellow,
+                BuildingType.Commercial => Color.blue,
                 BuildingType.PoliceStation => new Color(0.1f, 0.3f, 0.9f),
                 BuildingType.FireStation => Color.red,
                 BuildingType.Hospital => Color.white,
                 _ => Color.magenta
+            };
+        }
+
+        private static BuildingType ConvertToolToBuildingType(BuildTool tool)
+        {
+            return tool switch
+            {
+                BuildTool.Residential => BuildingType.Residential,
+                BuildTool.Industrial => BuildingType.Industrial,
+                BuildTool.Commercial => BuildingType.Commercial,
+                BuildTool.PoliceStation => BuildingType.PoliceStation,
+                BuildTool.FireStation => BuildingType.FireStation,
+                BuildTool.Hospital => BuildingType.Hospital,
+                _ => BuildingType.Empty
             };
         }
 
@@ -231,5 +306,27 @@ namespace CityBuilder.Unity
                 $"Crime: {_simulation.CrimeIndex:0.0} | FireRisk: {_simulation.FireRiskIndex:0.0} | Health: {_simulation.HealthIndex:0.0} | " +
                 $"Citizens: {_simulation.Citizens.Count} | Balance: {_simulation.Balance}");
         }
+
+#if ENABLE_INPUT_SYSTEM
+        private static bool IsPlacePressed()
+        {
+            return UnityEngine.InputSystem.Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+        }
+
+        private static Vector2 GetPointerScreenPosition()
+        {
+            return UnityEngine.InputSystem.Mouse.current?.position.ReadValue() ?? Vector2.zero;
+        }
+#else
+        private static bool IsPlacePressed()
+        {
+            return Input.GetMouseButtonDown(0);
+        }
+
+        private static Vector2 GetPointerScreenPosition()
+        {
+            return Input.mousePosition;
+        }
+#endif
     }
 }

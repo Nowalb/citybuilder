@@ -38,12 +38,6 @@ namespace CityBuilder.Simulation
             TickCount++;
             CalculateStats();
 
-            if (Unemployed == 0)
-            {
-                UpgradeRandomResidential();
-                CalculateStats();
-            }
-
             SyncCitizensToPopulation();
             MoveCitizens();
         }
@@ -94,27 +88,6 @@ namespace CityBuilder.Simulation
             FireRiskIndex = Clamp01((industrialCount * 0.06f) + (commercialCount * 0.03f) + (TotalResidents / 1000f) - (fireStationCount * 0.20f)) * 100f;
             HealthIndex = Clamp01(0.45f + (hospitalCount * 0.18f) - (CrimeIndex / 200f) - (FireRiskIndex / 250f)) * 100f;
         }
-
-        private void UpgradeRandomResidential()
-        {
-            var candidates = new List<Building>();
-
-            foreach (var building in _gridSystem.Buildings)
-            {
-                if (building.BuildingType == BuildingType.Residential)
-                {
-                    candidates.Add(building);
-                }
-            }
-
-            if (candidates.Count == 0)
-            {
-                return;
-            }
-
-            candidates[_random.Next(candidates.Count)].Upgrade();
-        }
-
         private void SyncCitizensToPopulation()
         {
             var targetCount = Math.Min(TotalResidents, 400);

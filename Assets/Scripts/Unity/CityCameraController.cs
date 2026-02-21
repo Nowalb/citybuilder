@@ -18,7 +18,7 @@ namespace CityBuilder.Unity
         [SerializeField] private bool enableEdgePan = true;
 
         [Header("Zoom")]
-        [SerializeField] private float zoomSpeed = 250f;
+        [SerializeField] private float zoomSpeed = 12f;
         [SerializeField] private float minDistance = 20f;
         [SerializeField] private float maxDistance = 120f;
 
@@ -125,7 +125,7 @@ namespace CityBuilder.Unity
                 return;
             }
 
-            _distance -= wheel * zoomSpeed * Time.deltaTime;
+            _distance -= wheel * zoomSpeed;
             _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
         }
 
@@ -192,7 +192,7 @@ namespace CityBuilder.Unity
 
         private static float GetMouseScroll()
         {
-            return (Mouse.current?.scroll.ReadValue().y ?? 0f) * 0.01f;
+            return (Mouse.current?.scroll.ReadValue().y ?? 0f) * 0.05f;
         }
 
         private static bool IsRotateLeftPressed()

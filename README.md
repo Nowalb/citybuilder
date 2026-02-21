@@ -15,7 +15,7 @@
 ## What you will see
 - Full 50x50 map generated as quads.
 - Road network generated automatically (gray tiles).
-- City fills itself over time (configurable `buildingsPlacedPerTick`).
+- No automatic map expansion: you place roads/buildings manually like in classic city-builders.
 - Building placement is allowed only on tiles adjacent to roads.
 - Safety-service buildings are included in growth:
   - Police Station
@@ -49,3 +49,9 @@ Controls:
 - middle mouse drag = orbit
 - `Q` / `E` = rotate left/right
 - Works with both **Input System package** and legacy **Input Manager**
+
+
+## Build UI (manual placement)
+- Use the in-game build menu (top-left) to choose tool: Road, Residential, Industrial, Commercial, Police, Fire, Hospital.
+- Left click a tile to place selected tool.
+- Buildings can only be placed on empty non-road tiles adjacent to a road.
