@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Pure simulation grid container and placement API.
+    /// Pure simulation grid container. Buildings require adjacency to roads.
     /// </summary>
     public sealed class GridSystem
     {
@@ -35,9 +35,19 @@ namespace CityBuilder.Simulation
             return IsInBounds(x, y) ? _tiles[x, y] : null;
         }
 
+        public bool PlaceRoad(int x, int y)
+        {
+            if (!IsInBounds(x, y))
+            {
+                return false;
+            }
+
+            return _tiles[x, y].TrySetRoad();
+        }
+
         public bool PlaceBuilding(int x, int y, BuildingType type)
         {
-            if (!IsInBounds(x, y) || type == BuildingType.Empty)
+            if (!IsBuildableTile(x, y) || type == BuildingType.Empty || !HasAdjacentRoad(x, y))
             {
                 return false;
             }
@@ -52,6 +62,27 @@ namespace CityBuilder.Simulation
 
             _buildings.Add(building);
             return true;
+        }
+
+        public bool HasAdjacentRoad(int x, int y)
+        {
+            return IsRoadAt(x + 1, y) || IsRoadAt(x - 1, y) || IsRoadAt(x, y + 1) || IsRoadAt(x, y - 1);
+        }
+
+        private bool IsRoadAt(int x, int y)
+        {
+            return IsInBounds(x, y) && _tiles[x, y].IsRoad;
+        }
+
+        private bool IsBuildableTile(int x, int y)
+        {
+            if (!IsInBounds(x, y))
+            {
+                return false;
+            }
+
+            var tile = _tiles[x, y];
+            return !tile.IsRoad && !tile.HasBuilding;
         }
 
         private bool IsInBounds(int x, int y)

@@ -3,6 +3,7 @@
 ## Folder structure to paste into Unity
 - `Assets/Scripts/Simulation` → pure C# simulation logic (no MonoBehaviour)
 - `Assets/Scripts/Unity` → Unity adapter and visual generation
+- `Assets/Tests/EditMode` → NUnit EditMode tests
 
 ## How to run
 1. Create/open Unity 2021+ 3D project.
@@ -11,8 +12,13 @@
 4. Add `CityBuilder.Unity.SimulationBootstrap` component.
 5. Press Play.
 
-What happens:
-- 50x50 city grid is generated as tile GameObjects.
-- Seed buildings are spawned and visualized as cubes.
-- Simulation ticks every 1 second and logs economy/population values.
-- Buildings can visually grow on upgrade (height scales with level).
+## What you will see
+- Full 50x50 map generated as quads.
+- Road network generated automatically (gray tiles).
+- City fills itself over time (configurable `buildingsPlacedPerTick`).
+- Building placement is allowed only on tiles adjacent to roads.
+- Building colors:
+  - Residential / domy = green
+  - Industrial / firmy = yellow
+  - Commercial / komercyjne = blue
+- Simulation tick runs every 1 second and logs economy/population metrics.

@@ -9,6 +9,8 @@ namespace CityBuilder.Tests.EditMode
         public void Tick_CalculatesPopulationJobsAndEconomy()
         {
             var grid = new GridSystem(10, 10);
+            grid.PlaceRoad(1, 2);
+            grid.PlaceRoad(2, 3);
             grid.PlaceBuilding(1, 1, BuildingType.Residential); // +8 residents, +2 upkeep
             grid.PlaceBuilding(2, 2, BuildingType.Commercial);  // +6 jobs, +3 upkeep
 
@@ -28,6 +30,8 @@ namespace CityBuilder.Tests.EditMode
         public void Tick_WhenNoUnemployment_UpgradesResidentialBuilding()
         {
             var grid = new GridSystem(10, 10);
+            grid.PlaceRoad(1, 2);
+            grid.PlaceRoad(2, 3);
             grid.PlaceBuilding(1, 1, BuildingType.Residential); // residents 8
             grid.PlaceBuilding(2, 2, BuildingType.Industrial);  // jobs 10 => unemployment 0
 

@@ -18,15 +18,13 @@ namespace CityBuilder.Tests.EditMode
         }
 
         [Test]
-        public void PlaceBuilding_AllowsOneBuildingPerTile()
+        public void PlaceBuilding_RequiresAdjacentRoad()
         {
             var grid = new GridSystem(5, 5);
 
-            var firstPlacement = grid.PlaceBuilding(2, 2, BuildingType.Residential);
-            var secondPlacement = grid.PlaceBuilding(2, 2, BuildingType.Industrial);
-
-            Assert.That(firstPlacement, Is.True);
-            Assert.That(secondPlacement, Is.False);
+            Assert.That(grid.PlaceBuilding(2, 2, BuildingType.Residential), Is.False);
+            Assert.That(grid.PlaceRoad(2, 1), Is.True);
+            Assert.That(grid.PlaceBuilding(2, 2, BuildingType.Residential), Is.True);
             Assert.That(grid.Buildings.Count, Is.EqualTo(1));
         }
 
@@ -34,11 +32,23 @@ namespace CityBuilder.Tests.EditMode
         public void PlaceBuilding_RejectsOutOfBoundsAndEmptyType()
         {
             var grid = new GridSystem(5, 5);
+            grid.PlaceRoad(0, 1);
 
             Assert.That(grid.PlaceBuilding(-1, 0, BuildingType.Residential), Is.False);
             Assert.That(grid.PlaceBuilding(6, 0, BuildingType.Residential), Is.False);
             Assert.That(grid.PlaceBuilding(0, 0, BuildingType.Empty), Is.False);
             Assert.That(grid.Buildings.Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void PlaceRoad_CannotOverwriteBuilding()
+        {
+            var grid = new GridSystem(5, 5);
+            grid.PlaceRoad(1, 2);
+            grid.PlaceBuilding(1, 1, BuildingType.Industrial);
+
+            Assert.That(grid.PlaceRoad(1, 1), Is.False);
+            Assert.That(grid.GetTile(1, 1).HasBuilding, Is.True);
         }
     }
 }
