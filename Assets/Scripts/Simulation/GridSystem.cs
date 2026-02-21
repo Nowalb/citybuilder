@@ -3,15 +3,16 @@ using System.Collections.Generic;
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Owns the city grid and handles tile-level placement operations.
+    /// Pure simulation grid container and placement API.
     /// </summary>
     public sealed class GridSystem
     {
-        public int Width { get; }
-        public int Height { get; }
-
         private readonly Tile[,] _tiles;
         private readonly List<Building> _buildings;
+
+        public int Width { get; }
+        public int Height { get; }
+        public IReadOnlyList<Building> Buildings => _buildings;
 
         public GridSystem(int width = 50, int height = 50)
         {
@@ -29,16 +30,11 @@ namespace CityBuilder.Simulation
             }
         }
 
-        public IReadOnlyList<Building> Buildings => _buildings;
-
         public Tile GetTile(int x, int y)
         {
             return IsInBounds(x, y) ? _tiles[x, y] : null;
         }
 
-        /// <summary>
-        /// Places a building if coordinates are valid and tile is empty.
-        /// </summary>
         public bool PlaceBuilding(int x, int y, BuildingType type)
         {
             if (!IsInBounds(x, y) || type == BuildingType.Empty)

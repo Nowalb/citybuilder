@@ -1,7 +1,7 @@
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Represents a single upgradable building and its simulation stats.
+    /// Pure simulation entity for one building.
     /// </summary>
     public sealed class Building
     {
@@ -18,9 +18,6 @@ namespace CityBuilder.Simulation
             UpdateStats();
         }
 
-        /// <summary>
-        /// Increases building level and recalculates simulation outputs.
-        /// </summary>
         public void Upgrade()
         {
             Level++;
@@ -28,8 +25,7 @@ namespace CityBuilder.Simulation
         }
 
         /// <summary>
-        /// Updates residents, jobs and upkeep based on type and level.
-        /// Keep formulas simple now; easy to expand with config data later.
+        /// Recalculates simulation stats based on type + level.
         /// </summary>
         public void UpdateStats()
         {
@@ -40,25 +36,21 @@ namespace CityBuilder.Simulation
                     Jobs = 0;
                     UpkeepCost = 2 * Level;
                     break;
-
                 case BuildingType.Commercial:
                     Residents = 0;
                     Jobs = 6 * Level;
                     UpkeepCost = 3 * Level;
                     break;
-
                 case BuildingType.Industrial:
                     Residents = 0;
                     Jobs = 10 * Level;
                     UpkeepCost = 5 * Level;
                     break;
-
                 case BuildingType.Service:
                     Residents = 0;
                     Jobs = 4 * Level;
                     UpkeepCost = 4 * Level;
                     break;
-
                 default:
                     Residents = 0;
                     Jobs = 0;

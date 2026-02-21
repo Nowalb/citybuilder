@@ -1,15 +1,13 @@
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Represents one grid cell that can hold at most one building.
+    /// Pure simulation tile. Holds a single building at most.
     /// </summary>
     public sealed class Tile
     {
         public int X { get; }
         public int Y { get; }
-
         public Building Building { get; private set; }
-
         public bool HasBuilding => Building != null;
 
         public Tile(int x, int y)

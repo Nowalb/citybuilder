@@ -1,7 +1,7 @@
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Defines the supported building categories in the simulation.
+    /// Defines supported building categories.
     /// </summary>
     public enum BuildingType
     {

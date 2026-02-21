@@ -4,21 +4,20 @@ using System.Collections.Generic;
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Pure simulation orchestrator. Computes city metrics from grid/buildings.
-    /// No Unity dependencies.
+    /// Pure C# simulation service. No Unity dependencies.
     /// </summary>
     public sealed class CitySimulation
     {
         private readonly GridSystem _gridSystem;
         private readonly Random _random;
 
+        public int TickCount { get; private set; }
         public int TotalResidents { get; private set; }
         public int TotalJobs { get; private set; }
         public int Unemployed { get; private set; }
         public int Income { get; private set; }
         public int Upkeep { get; private set; }
         public int Balance { get; private set; }
-        public int TickCount { get; private set; }
 
         public CitySimulation(GridSystem gridSystem, int? randomSeed = null)
         {
@@ -26,23 +25,19 @@ namespace CityBuilder.Simulation
             _random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
         }
 
-        /// <summary>
-        /// Executes one simulation step and updates city-level metrics.
-        /// </summary>
         public void Tick()
         {
             TickCount++;
-
-            CalculateCityStats();
+            CalculateStats();
 
             if (Unemployed == 0)
             {
-                UpgradeRandomResidentialBuilding();
-                CalculateCityStats();
+                UpgradeRandomResidential();
+                CalculateStats();
             }
         }
 
-        private void CalculateCityStats()
+        private void CalculateStats()
         {
             TotalResidents = 0;
             TotalJobs = 0;
@@ -60,7 +55,7 @@ namespace CityBuilder.Simulation
             Balance = Income - Upkeep;
         }
 
-        private void UpgradeRandomResidentialBuilding()
+        private void UpgradeRandomResidential()
         {
             var candidates = new List<Building>();
 
@@ -77,8 +72,7 @@ namespace CityBuilder.Simulation
                 return;
             }
 
-            var selected = candidates[_random.Next(candidates.Count)];
-            selected.Upgrade();
+            candidates[_random.Next(candidates.Count)].Upgrade();
         }
     }
 }
