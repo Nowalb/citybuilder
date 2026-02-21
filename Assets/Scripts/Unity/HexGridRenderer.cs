@@ -38,7 +38,8 @@ namespace CityBuilder.Unity
             {
                 var hexGo = new GameObject($"Hex_{tile.Coord.Q}_{tile.Coord.R}");
                 hexGo.transform.SetParent(_container, false);
-                hexGo.transform.position = HexGridMath.HexToWorldPosition(tile.Coord, hexSize);
+                var worldPos = HexGridMath.HexToWorldPosition(tile.Coord, hexSize);
+                hexGo.transform.position = new Vector3(worldPos.x, 0.01f, worldPos.z);
 
                 var meshFilter = hexGo.AddComponent<MeshFilter>();
                 var meshRenderer = hexGo.AddComponent<MeshRenderer>();
@@ -98,7 +99,7 @@ namespace CityBuilder.Unity
                 return material;
             }
 
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Sprites/Default");
+            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             material = new Material(shader) { color = color };
             _fallbackTerrainMaterials[terrainType] = material;
             return material;
@@ -122,8 +123,8 @@ namespace CityBuilder.Unity
             {
                 var t = i * 3;
                 triangles[t] = 0;
-                triangles[t + 1] = i + 1;
-                triangles[t + 2] = i == 5 ? 1 : i + 2;
+                triangles[t + 1] = i == 5 ? 1 : i + 2;
+                triangles[t + 2] = i + 1;
             }
 
             mesh.vertices = vertices;
