@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CityBuilder.Simulation;
 using UnityEngine;
 
@@ -17,10 +18,13 @@ namespace CityBuilder.Unity
         [SerializeField] private float tickIntervalSeconds = 1f;
         [SerializeField] private int buildingsPlacedPerTick = 120;
 
+        [Header("Citizens")]
+        [SerializeField] private int maxCitizenDots = 300;
+
         private GridSystem _grid;
         private CitySimulation _simulation;
-        private GameObject[,] _tileViews;
-        private readonly System.Collections.Generic.Dictionary<Building, GameObject> _buildingViews = new();
+        private readonly Dictionary<Building, GameObject> _buildingViews = new();
+        private readonly Dictionary<Citizen, GameObject> _citizenViews = new();
         private float _elapsed;
         private int _placementCursor;
 
@@ -42,8 +46,9 @@ namespace CityBuilder.Unity
             {
                 _elapsed -= tickIntervalSeconds;
                 FillCityStep();
-                RefreshBuildingViews();
                 RunTick();
+                RefreshBuildingViews();
+                RefreshCitizenViews();
             }
         }
 
@@ -107,18 +112,20 @@ namespace CityBuilder.Unity
 
         private static BuildingType ResolveBuildingType(int x, int y)
         {
-            var value = (x + y) % 3;
+            var value = (x + y) % 10;
             return value switch
             {
-                0 => BuildingType.Residential,
-                1 => BuildingType.Industrial,
-                _ => BuildingType.Commercial
+                0 => BuildingType.PoliceStation,
+                1 => BuildingType.FireStation,
+                2 => BuildingType.Hospital,
+                3 or 4 => BuildingType.Commercial,
+                5 or 6 => BuildingType.Industrial,
+                _ => BuildingType.Residential
             };
         }
 
         private void GenerateTileViews()
         {
-            _tileViews = new GameObject[width, height];
             var root = new GameObject("GridRoot");
             root.transform.SetParent(transform, false);
 
@@ -136,42 +143,68 @@ namespace CityBuilder.Unity
                     var renderer = tile.GetComponent<Renderer>();
                     var simTile = _grid.GetTile(x, y);
                     renderer.material.color = simTile != null && simTile.IsRoad ? Color.gray : new Color(0.22f, 0.24f, 0.22f);
-
-                    _tileViews[x, y] = tile;
                 }
             }
         }
 
         private void RefreshBuildingViews()
         {
-            for (var x = 0; x < width; x++)
+            foreach (var placement in _grid.Placements)
             {
-                for (var y = 0; y < height; y++)
+                var building = placement.Building;
+                if (_buildingViews.TryGetValue(building, out var view))
                 {
-                    var tile = _grid.GetTile(x, y);
-                    if (tile == null || !tile.HasBuilding)
-                    {
-                        continue;
-                    }
+                    var heightScale = 0.5f + building.Level * 0.4f;
+                    view.transform.localScale = new Vector3(tileSize * 0.8f, heightScale, tileSize * 0.8f);
+                    view.transform.position = new Vector3(placement.X * tileSize, heightScale * 0.5f, placement.Y * tileSize);
+                    continue;
+                }
 
-                    var building = tile.Building;
-                    if (_buildingViews.TryGetValue(building, out var view))
-                    {
-                        view.transform.localScale = new Vector3(tileSize * 0.8f, 0.5f + building.Level * 0.4f, tileSize * 0.8f);
-                        view.transform.position = new Vector3(x * tileSize, (0.5f + building.Level * 0.4f) * 0.5f, y * tileSize);
-                        continue;
-                    }
+                var buildingGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                buildingGo.name = $"Building_{building.BuildingType}_{placement.X}_{placement.Y}";
+                buildingGo.transform.SetParent(transform, false);
 
-                    var buildingGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    buildingGo.name = $"Building_{building.BuildingType}_{x}_{y}";
-                    buildingGo.transform.SetParent(transform, false);
-                    buildingGo.transform.localScale = new Vector3(tileSize * 0.8f, 0.5f + building.Level * 0.4f, tileSize * 0.8f);
-                    buildingGo.transform.position = new Vector3(x * tileSize, (0.5f + building.Level * 0.4f) * 0.5f, y * tileSize);
+                var initialHeight = 0.5f + building.Level * 0.4f;
+                buildingGo.transform.localScale = new Vector3(tileSize * 0.8f, initialHeight, tileSize * 0.8f);
+                buildingGo.transform.position = new Vector3(placement.X * tileSize, initialHeight * 0.5f, placement.Y * tileSize);
+                buildingGo.GetComponent<Renderer>().material.color = ResolveBuildingColor(building.BuildingType);
 
-                    var renderer = buildingGo.GetComponent<Renderer>();
-                    renderer.material.color = ResolveBuildingColor(building.BuildingType);
+                _buildingViews.Add(building, buildingGo);
+            }
+        }
 
-                    _buildingViews.Add(building, buildingGo);
+        private void RefreshCitizenViews()
+        {
+            var visibleCount = 0;
+            foreach (var citizen in _simulation.Citizens)
+            {
+                if (visibleCount >= maxCitizenDots)
+                {
+                    break;
+                }
+
+                if (!_citizenViews.TryGetValue(citizen, out var view))
+                {
+                    view = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    view.name = "CitizenDot";
+                    view.transform.SetParent(transform, false);
+                    view.transform.localScale = Vector3.one * (tileSize * 0.2f);
+                    view.GetComponent<Renderer>().material.color = Color.white;
+                    _citizenViews.Add(citizen, view);
+                }
+
+                view.SetActive(true);
+                view.transform.position = new Vector3(citizen.RoadX * tileSize, 0.15f, citizen.RoadY * tileSize);
+                visibleCount++;
+            }
+
+            if (visibleCount < _citizenViews.Count)
+            {
+                var hiddenIndex = 0;
+                foreach (var kv in _citizenViews)
+                {
+                    kv.Value.SetActive(hiddenIndex < visibleCount);
+                    hiddenIndex++;
                 }
             }
         }
@@ -183,15 +216,20 @@ namespace CityBuilder.Unity
                 BuildingType.Residential => Color.green,     // domy
                 BuildingType.Industrial => Color.yellow,     // firmy
                 BuildingType.Commercial => Color.blue,       // komercyjne
-                BuildingType.Service => Color.yellow,
-                _ => Color.white
+                BuildingType.PoliceStation => new Color(0.1f, 0.3f, 0.9f),
+                BuildingType.FireStation => Color.red,
+                BuildingType.Hospital => Color.white,
+                _ => Color.magenta
             };
         }
 
         private void RunTick()
         {
             _simulation.Tick();
-            Debug.Log($"Tick {_simulation.TickCount} | Buildings: {_grid.Buildings.Count} | Residents: {_simulation.TotalResidents} | Jobs: {_simulation.TotalJobs} | Unemployed: {_simulation.Unemployed} | Income: {_simulation.Income} | Upkeep: {_simulation.Upkeep} | Balance: {_simulation.Balance}");
+            Debug.Log(
+                $"Tick {_simulation.TickCount} | Buildings: {_grid.Buildings.Count} | Residents: {_simulation.TotalResidents} | Jobs: {_simulation.TotalJobs} | " +
+                $"Crime: {_simulation.CrimeIndex:0.0} | FireRisk: {_simulation.FireRiskIndex:0.0} | Health: {_simulation.HealthIndex:0.0} | " +
+                $"Citizens: {_simulation.Citizens.Count} | Balance: {_simulation.Balance}");
         }
     }
 }

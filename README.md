@@ -17,8 +17,19 @@
 - Road network generated automatically (gray tiles).
 - City fills itself over time (configurable `buildingsPlacedPerTick`).
 - Building placement is allowed only on tiles adjacent to roads.
+- Safety-service buildings are included in growth:
+  - Police Station
+  - Fire Station
+  - Hospital
 - Building colors:
   - Residential / domy = green
   - Industrial / firmy = yellow
   - Commercial / komercyjne = blue
-- Simulation tick runs every 1 second and logs economy/population metrics.
+  - Police = dark blue
+  - Fire Station = red
+  - Hospital = white
+- Indicators in logs every tick:
+  - Crime index
+  - Fire risk index
+  - Health index
+- Citizens visualized as small white dots moving only on roads between home/work/shop.

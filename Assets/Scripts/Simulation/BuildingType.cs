@@ -9,6 +9,8 @@ namespace CityBuilder.Simulation
         Residential = 1,
         Commercial = 2,
         Industrial = 3,
-        Service = 4
+        PoliceStation = 4,
+        FireStation = 5,
+        Hospital = 6
     }
 }

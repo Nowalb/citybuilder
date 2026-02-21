@@ -7,12 +7,28 @@ namespace CityBuilder.Simulation
     /// </summary>
     public sealed class GridSystem
     {
+        public readonly struct BuildingPlacement
+        {
+            public BuildingPlacement(Building building, int x, int y)
+            {
+                Building = building;
+                X = x;
+                Y = y;
+            }
+
+            public Building Building { get; }
+            public int X { get; }
+            public int Y { get; }
+        }
+
         private readonly Tile[,] _tiles;
         private readonly List<Building> _buildings;
+        private readonly List<BuildingPlacement> _placements;
 
         public int Width { get; }
         public int Height { get; }
         public IReadOnlyList<Building> Buildings => _buildings;
+        public IReadOnlyList<BuildingPlacement> Placements => _placements;
 
         public GridSystem(int width = 50, int height = 50)
         {
@@ -20,6 +36,7 @@ namespace CityBuilder.Simulation
             Height = height;
             _tiles = new Tile[Width, Height];
             _buildings = new List<Building>();
+            _placements = new List<BuildingPlacement>();
 
             for (var x = 0; x < Width; x++)
             {
@@ -61,12 +78,48 @@ namespace CityBuilder.Simulation
             }
 
             _buildings.Add(building);
+            _placements.Add(new BuildingPlacement(building, x, y));
             return true;
         }
 
         public bool HasAdjacentRoad(int x, int y)
         {
             return IsRoadAt(x + 1, y) || IsRoadAt(x - 1, y) || IsRoadAt(x, y + 1) || IsRoadAt(x, y - 1);
+        }
+
+        public bool TryGetAdjacentRoad(int x, int y, out int roadX, out int roadY)
+        {
+            if (IsRoadAt(x + 1, y))
+            {
+                roadX = x + 1;
+                roadY = y;
+                return true;
+            }
+
+            if (IsRoadAt(x - 1, y))
+            {
+                roadX = x - 1;
+                roadY = y;
+                return true;
+            }
+
+            if (IsRoadAt(x, y + 1))
+            {
+                roadX = x;
+                roadY = y + 1;
+                return true;
+            }
+
+            if (IsRoadAt(x, y - 1))
+            {
+                roadX = x;
+                roadY = y - 1;
+                return true;
+            }
+
+            roadX = -1;
+            roadY = -1;
+            return false;
         }
 
         private bool IsRoadAt(int x, int y)

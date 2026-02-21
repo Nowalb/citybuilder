@@ -46,10 +46,20 @@ namespace CityBuilder.Simulation
                     Jobs = 10 * Level;
                     UpkeepCost = 5 * Level;
                     break;
-                case BuildingType.Service:
+                case BuildingType.PoliceStation:
                     Residents = 0;
-                    Jobs = 4 * Level;
-                    UpkeepCost = 4 * Level;
+                    Jobs = 12 * Level;
+                    UpkeepCost = 8 * Level;
+                    break;
+                case BuildingType.FireStation:
+                    Residents = 0;
+                    Jobs = 10 * Level;
+                    UpkeepCost = 9 * Level;
+                    break;
+                case BuildingType.Hospital:
+                    Residents = 0;
+                    Jobs = 14 * Level;
+                    UpkeepCost = 12 * Level;
                     break;
                 default:
                     Residents = 0;
