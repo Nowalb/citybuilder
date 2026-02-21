@@ -5,6 +5,7 @@ namespace CityBuilder.Simulation
 {
     /// <summary>
     /// Pure simulation hex grid backed by Dictionary for scalable sparse/chunked growth.
+    /// Supports rectangular or true hexagon-shaped maps.
     /// </summary>
     public sealed class GridSystem
     {
@@ -26,6 +27,9 @@ namespace CityBuilder.Simulation
 
         public int Width { get; }
         public int Height { get; }
+        public int SideLength { get; }
+        public bool IsHexShaped { get; }
+
         public IReadOnlyCollection<Tile> Tiles => _tiles.Values;
         public IReadOnlyList<Building> Buildings => _buildings;
         public IReadOnlyList<BuildingPlacement> Placements => _placements;
@@ -34,6 +38,9 @@ namespace CityBuilder.Simulation
         {
             Width = width;
             Height = height;
+            SideLength = 0;
+            IsHexShaped = false;
+
             _tiles = new Dictionary<HexCoord, Tile>(width * height);
             _buildings = new List<Building>();
             _placements = new List<BuildingPlacement>();
@@ -43,17 +50,59 @@ namespace CityBuilder.Simulation
                 for (var r = 0; r < Height; r++)
                 {
                     var coord = new HexCoord(q, r);
-                    var terrain = ResolveTerrain(coord, terrainSeed, waterThreshold);
-                    _tiles[coord] = new Tile(coord, terrain);
+                    _tiles[coord] = new Tile(coord, ResolveTerrain(coord, terrainSeed, waterThreshold));
                 }
             }
         }
 
-        public Tile GetTile(HexCoord coord)
+        /// <summary>
+        /// Creates map with dimensions derived from sideLength.
+        /// When createHexShape is true, the map is a true hexagon with edge length sideLength.
+        /// When false, the map is a rectangle of size (2*sideLength-1) x (2*sideLength-1).
+        /// </summary>
+        public GridSystem(int sideLength, int terrainSeed, float waterThreshold, bool createHexShape)
         {
-            return _tiles.TryGetValue(coord, out var tile) ? tile : null;
+            SideLength = Math.Max(1, sideLength);
+            Width = SideLength * 2 - 1;
+            Height = SideLength * 2 - 1;
+            IsHexShaped = createHexShape;
+
+            var capacity = createHexShape
+                ? 3 * SideLength * (SideLength - 1) + 1
+                : Width * Height;
+
+            _tiles = new Dictionary<HexCoord, Tile>(capacity);
+            _buildings = new List<Building>();
+            _placements = new List<BuildingPlacement>();
+
+            if (!createHexShape)
+            {
+                for (var q = 0; q < Width; q++)
+                {
+                    for (var r = 0; r < Height; r++)
+                    {
+                        var coord = new HexCoord(q, r);
+                        _tiles[coord] = new Tile(coord, ResolveTerrain(coord, terrainSeed, waterThreshold));
+                    }
+                }
+
+                return;
+            }
+
+            var radius = SideLength - 1;
+            for (var q = -radius; q <= radius; q++)
+            {
+                var rMin = Math.Max(-radius, -q - radius);
+                var rMax = Math.Min(radius, -q + radius);
+                for (var r = rMin; r <= rMax; r++)
+                {
+                    var coord = new HexCoord(q, r);
+                    _tiles[coord] = new Tile(coord, ResolveTerrain(coord, terrainSeed, waterThreshold));
+                }
+            }
         }
 
+        public Tile GetTile(HexCoord coord) => _tiles.TryGetValue(coord, out var tile) ? tile : null;
         public bool Contains(HexCoord coord) => _tiles.ContainsKey(coord);
 
         public bool PlaceRoad(HexCoord coord)
@@ -71,7 +120,6 @@ namespace CityBuilder.Simulation
 
             var tile = _tiles[coord];
             var building = new Building(type);
-
             if (!tile.TryPlaceBuilding(building))
             {
                 return false;
@@ -155,21 +203,9 @@ namespace CityBuilder.Simulation
         private static TerrainType ResolveTerrain(HexCoord coord, int seed, float waterThreshold)
         {
             var n = Noise01(coord.Q, coord.R, seed);
-            if (n < waterThreshold)
-            {
-                return TerrainType.Water;
-            }
-
-            if (n > 0.78f)
-            {
-                return TerrainType.Hill;
-            }
-
-            if (n > 0.52f)
-            {
-                return TerrainType.Forest;
-            }
-
+            if (n < waterThreshold) return TerrainType.Water;
+            if (n > 0.78f) return TerrainType.Hill;
+            if (n > 0.52f) return TerrainType.Forest;
             return TerrainType.Grass;
         }
 

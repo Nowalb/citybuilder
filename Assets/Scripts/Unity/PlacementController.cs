@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CityBuilder.Simulation;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -9,8 +10,7 @@ using UnityEngine.InputSystem.UI;
 namespace CityBuilder.Unity
 {
     /// <summary>
-    /// Optional manual placement controller kept for debugging.
-    /// Auto-growth works without this component.
+    /// Manual placement controller with click-and-drag painting across hexes.
     /// </summary>
     public sealed class PlacementController : MonoBehaviour
     {
@@ -28,6 +28,11 @@ namespace CityBuilder.Unity
         [SerializeField] private SimulationBootstrap bootstrap;
         [SerializeField] private BuildTool activeTool = BuildTool.Road;
 
+        private static readonly Rect BuildMenuRect = new(10f, 0f, 760f, 92f);
+
+        private bool _isDragging;
+        private HexCoord _lastDragCoord;
+
         private void Awake()
         {
             EnsureEventSystemExists();
@@ -40,29 +45,138 @@ namespace CityBuilder.Unity
 
         private void Update()
         {
-            if (!IsPlacePressed() || bootstrap == null)
+            if (bootstrap == null)
             {
                 return;
             }
 
+            if (IsPointerOverUi())
+            {
+                _isDragging = false;
+                return;
+            }
+
+            if (IsPlaceStarted())
+            {
+                if (TryPick(out var start))
+                {
+                    _isDragging = true;
+                    _lastDragCoord = start;
+                    TryPlace(start);
+                }
+            }
+
+            if (_isDragging && IsPlaceHeld())
+            {
+                if (TryPick(out var current))
+                {
+                    PaintDragPath(_lastDragCoord, current);
+                    _lastDragCoord = current;
+                }
+            }
+
+            if (_isDragging && IsPlaceReleased())
+            {
+                _isDragging = false;
+            }
+        }
+
+        private void OnGUI()
+        {
+            var rect = new Rect(BuildMenuRect.x, Screen.height - 105f, BuildMenuRect.width, BuildMenuRect.height);
+            GUILayout.BeginArea(rect, "Build", GUI.skin.window);
+            GUILayout.BeginHorizontal();
+            DrawToolButton("Road", BuildTool.Road);
+            DrawToolButton("Residential", BuildTool.Residential);
+            DrawToolButton("Industrial", BuildTool.Industrial);
+            DrawToolButton("Commercial", BuildTool.Commercial);
+            DrawToolButton("Police", BuildTool.PoliceStation);
+            DrawToolButton("Fire", BuildTool.FireStation);
+            DrawToolButton("Hospital", BuildTool.Hospital);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Click and drag to paint across hexes.");
+            GUILayout.EndArea();
+        }
+
+        private void DrawToolButton(string label, BuildTool tool)
+        {
+            var prev = GUI.backgroundColor;
+            if (activeTool == tool)
+            {
+                GUI.backgroundColor = Color.cyan;
+            }
+
+            if (GUILayout.Button(label, GUILayout.Height(30), GUILayout.MinWidth(95)))
+            {
+                activeTool = tool;
+            }
+
+            GUI.backgroundColor = prev;
+        }
+
+        private void PaintDragPath(HexCoord from, HexCoord to)
+        {
+            foreach (var coord in HexLine(from, to))
+            {
+                TryPlace(coord);
+            }
+
+            bootstrap.RefreshViews();
+        }
+
+        private void TryPlace(HexCoord coord)
+        {
+            if (activeTool == BuildTool.Road)
+            {
+                bootstrap.PlaceRoad(coord);
+                return;
+            }
+
+            bootstrap.PlaceBuilding(coord, ToBuildingType(activeTool));
+        }
+
+        private bool TryPick(out HexCoord coord)
+        {
+            return bootstrap.TryPickHex(GetPointerScreenPosition(), out coord);
+        }
+
+        private bool IsPointerOverUi()
+        {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             {
-                return;
+                return true;
             }
 
-            if (!bootstrap.TryPickHex(GetPointerScreenPosition(), out var coord))
+            var pos = GetPointerScreenPosition();
+            var uiRect = new Rect(BuildMenuRect.x, Screen.height - 105f, BuildMenuRect.width, BuildMenuRect.height);
+            var converted = new Vector2(pos.x, Screen.height - pos.y);
+            return uiRect.Contains(converted);
+        }
+
+        private static IEnumerable<HexCoord> HexLine(HexCoord a, HexCoord b)
+        {
+            var n = HexDistance(a, b);
+            if (n == 0)
             {
-                return;
+                yield return a;
+                yield break;
             }
 
-            var placed = activeTool == BuildTool.Road
-                ? bootstrap.PlaceRoad(coord)
-                : bootstrap.PlaceBuilding(coord, ToBuildingType(activeTool));
-
-            if (placed)
+            for (var i = 0; i <= n; i++)
             {
-                bootstrap.RefreshViews();
+                var t = i / (float)n;
+                var aq = a.Q + (b.Q - a.Q) * t;
+                var ar = a.R + (b.R - a.R) * t;
+                yield return HexGridMath.AxialRound(aq, ar);
             }
+        }
+
+        private static int HexDistance(HexCoord a, HexCoord b)
+        {
+            var dq = a.Q - b.Q;
+            var dr = a.R - b.R;
+            var ds = (-a.Q - a.R) - (-b.Q - b.R);
+            return (Mathf.Abs(dq) + Mathf.Abs(dr) + Mathf.Abs(ds)) / 2;
         }
 
         private static BuildingType ToBuildingType(BuildTool tool)
@@ -96,10 +210,14 @@ namespace CityBuilder.Unity
         }
 
 #if ENABLE_INPUT_SYSTEM
-        private static bool IsPlacePressed() => Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+        private static bool IsPlaceStarted() => Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+        private static bool IsPlaceHeld() => Mouse.current?.leftButton.isPressed ?? false;
+        private static bool IsPlaceReleased() => Mouse.current?.leftButton.wasReleasedThisFrame ?? false;
         private static Vector2 GetPointerScreenPosition() => Mouse.current?.position.ReadValue() ?? Vector2.zero;
 #else
-        private static bool IsPlacePressed() => Input.GetMouseButtonDown(0);
+        private static bool IsPlaceStarted() => Input.GetMouseButtonDown(0);
+        private static bool IsPlaceHeld() => Input.GetMouseButton(0);
+        private static bool IsPlaceReleased() => Input.GetMouseButtonUp(0);
         private static Vector2 GetPointerScreenPosition() => Input.mousePosition;
 #endif
     }

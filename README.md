@@ -16,6 +16,7 @@
 
 ## Terrain generation
 - Map starts as terrain-only (no initial roads/buildings).
+- Map shape is a true axial hexagon with side length 30 hexes (configurable in `SimulationBootstrap`).
 - Terrain is generated deterministically from seed in simulation layer.
 - Terrain types: `Grass`, `Forest`, `Hill`, `Water`.
 - Water tiles block roads and buildings.
@@ -39,7 +40,7 @@
 2. Copy `Assets` folder from this repo into your Unity project.
 3. Create empty GameObject named `Simulation`.
 4. Add `SimulationBootstrap` + `HexGridRenderer` to that object.
-5. (Optional) add `PlacementController` for manual placement debug.
+5. (Optional) add `PlacementController` for manual placement + drag painting.
 6. Add `CityCameraController` to Main Camera.
 7. Press Play.
 
@@ -48,3 +49,8 @@
 - Placement checks `EventSystem.current.IsPointerOverGameObject()`.
 - If EventSystem is missing, `PlacementController` creates one.
 - Hex renderer uses shared mesh/materials to limit allocations.
+
+
+## Manual placement UI
+- Simple bottom UI lets you choose: Road, Residential, Industrial, Commercial, Police, Fire, Hospital.
+- Click-and-drag paints across all crossed hexes (road drag and other tools as well).

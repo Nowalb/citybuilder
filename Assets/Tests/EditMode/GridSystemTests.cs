@@ -18,6 +18,20 @@ namespace CityBuilder.Tests.EditMode
         }
 
         [Test]
+        public void Constructor_CreatesHexMapWithSideLength30()
+        {
+            const int side = 30;
+            var grid = new GridSystem(side, terrainSeed: 1, waterThreshold: 0f, createHexShape: true);
+
+            var expectedTileCount = 3 * side * (side - 1) + 1;
+            Assert.That(grid.SideLength, Is.EqualTo(side));
+            Assert.That(grid.IsHexShaped, Is.True);
+            Assert.That(grid.Tiles.Count, Is.EqualTo(expectedTileCount));
+            Assert.That(grid.Contains(new HexCoord(0, 0)), Is.True);
+            Assert.That(grid.Contains(new HexCoord(side, side)), Is.False);
+        }
+
+        [Test]
         public void PlaceBuilding_RequiresAdjacentRoad()
         {
             var grid = new GridSystem(5, 5, terrainSeed: 1, waterThreshold: 0f);

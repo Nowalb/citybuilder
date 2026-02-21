@@ -10,8 +10,7 @@ namespace CityBuilder.Unity
     public sealed class SimulationBootstrap : MonoBehaviour
     {
         [Header("Hex Grid")]
-        [SerializeField] private int width = 50;
-        [SerializeField] private int height = 50;
+        [SerializeField] private int hexMapSideLength = 30;
         [SerializeField] private float hexSize = 1f;
         [SerializeField] private int terrainSeed = 1337;
         [SerializeField, Range(0f, 0.45f)] private float waterThreshold = 0.12f;
@@ -42,8 +41,7 @@ namespace CityBuilder.Unity
 
         private void OnValidate()
         {
-            width = Mathf.Max(1, width);
-            height = Mathf.Max(1, height);
+            hexMapSideLength = Mathf.Max(2, hexMapSideLength);
             hexSize = Mathf.Max(0.1f, hexSize);
             tickIntervalSeconds = Mathf.Max(0.1f, tickIntervalSeconds);
             maxCitizenDots = Mathf.Max(1, maxCitizenDots);
@@ -68,7 +66,7 @@ namespace CityBuilder.Unity
         private void Start()
         {
             _mainCamera = Camera.main;
-            _grid = new GridSystem(width, height, terrainSeed, waterThreshold);
+            _grid = new GridSystem(hexMapSideLength, terrainSeed, waterThreshold, createHexShape: true);
             _simulation = new CitySimulation(_grid);
 
             hexGridRenderer.Initialize(_grid, hexSize);
@@ -82,7 +80,6 @@ namespace CityBuilder.Unity
             while (_elapsed >= tickIntervalSeconds)
             {
                 _elapsed -= tickIntervalSeconds;
-
                 RunAutoGrowthStep();
                 RunTick();
                 RefreshViews();
@@ -125,8 +122,7 @@ namespace CityBuilder.Unity
             if (ok)
             {
                 RegisterRoad(coord);
-                var tile = _grid.GetTile(coord);
-                hexGridRenderer.RefreshTile(tile);
+                hexGridRenderer.RefreshTile(_grid.GetTile(coord));
             }
 
             return ok;
@@ -149,7 +145,6 @@ namespace CityBuilder.Unity
 
             var placedRoads = 0;
             var safety = 0;
-
             while (placedRoads < roadsPerTick && safety < 400)
             {
                 safety++;
@@ -159,8 +154,7 @@ namespace CityBuilder.Unity
                 }
 
                 var source = _roadCoords[Random.Range(0, _roadCoords.Count)];
-                var neighbors = source.GetNeighbors();
-                foreach (var target in neighbors)
+                foreach (var target in source.GetNeighbors())
                 {
                     if (!_grid.Contains(target))
                     {
@@ -188,7 +182,6 @@ namespace CityBuilder.Unity
 
             var placedBuildings = 0;
             safety = 0;
-
             while (placedBuildings < buildingsPerTick && safety < 500)
             {
                 safety++;
@@ -199,6 +192,7 @@ namespace CityBuilder.Unity
 
                 var road = _roadCoords[Random.Range(0, _roadCoords.Count)];
                 var candidates = _grid.GetTilesInRange(road, buildingRoadSearchRadius);
+
                 for (var i = 0; i < candidates.Count && placedBuildings < buildingsPerTick; i++)
                 {
                     var tile = candidates[i];
@@ -207,12 +201,7 @@ namespace CityBuilder.Unity
                         continue;
                     }
 
-                    if (!_grid.HasAdjacentRoad(tile.Coord))
-                    {
-                        continue;
-                    }
-
-                    if (Random.value > 0.25f)
+                    if (!_grid.HasAdjacentRoad(tile.Coord) || Random.value > 0.25f)
                     {
                         continue;
                     }
@@ -232,10 +221,9 @@ namespace CityBuilder.Unity
                 return;
             }
 
-            var center = new HexCoord(width / 2, height / 2);
+            var center = new HexCoord(0, 0);
             if (!PlaceRoad(center))
             {
-                // Find first non-water tile if center is blocked.
                 foreach (var tile in _grid.Tiles)
                 {
                     if (tile.IsBuildableTerrain && PlaceRoad(tile.Coord))
