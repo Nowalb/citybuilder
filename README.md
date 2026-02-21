@@ -33,3 +33,18 @@
   - Fire risk index
   - Health index
 - Citizens visualized as small white dots moving only on roads between home/work/shop.
+
+## Camera setup (Cities-style)
+1. Select your `Main Camera`.
+2. Add `CityBuilder.Unity.CityCameraController`.
+3. Optional recommended start values for 50x50 map:
+   - `xBounds`: `(-20, 80)`
+   - `zBounds`: `(-20, 80)`
+   - `pivot`: `(25, 0, 25)`
+
+Controls:
+- `WASD` / arrow keys = pan
+- mouse near screen edge = edge pan
+- mouse wheel = zoom in/out
+- middle mouse drag = orbit
+- `Q` / `E` = rotate left/right
