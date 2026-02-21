@@ -48,3 +48,4 @@ Controls:
 - mouse wheel = zoom in/out
 - middle mouse drag = orbit
 - `Q` / `E` = rotate left/right
+- Works with both **Input System package** and legacy **Input Manager**

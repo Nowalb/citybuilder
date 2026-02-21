@@ -1,9 +1,13 @@
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace CityBuilder.Unity
 {
     /// <summary>
     /// RTS/city-builder camera controller (Cities-style): pan, rotate and zoom.
+    /// Works with both the old Input Manager and the new Input System package.
     /// Attach to Main Camera.
     /// </summary>
     public sealed class CityCameraController : MonoBehaviour
@@ -54,25 +58,26 @@ namespace CityBuilder.Unity
 
         private void HandlePan()
         {
-            var horizontal = Input.GetAxisRaw("Horizontal");
-            var vertical = Input.GetAxisRaw("Vertical");
+            var horizontal = GetHorizontalAxis();
+            var vertical = GetVerticalAxis();
+            var mousePosition = GetMousePosition();
 
             if (enableEdgePan)
             {
-                if (Input.mousePosition.x <= edgePanBorder)
+                if (mousePosition.x <= edgePanBorder)
                 {
                     horizontal -= 1f;
                 }
-                else if (Input.mousePosition.x >= Screen.width - edgePanBorder)
+                else if (mousePosition.x >= Screen.width - edgePanBorder)
                 {
                     horizontal += 1f;
                 }
 
-                if (Input.mousePosition.y <= edgePanBorder)
+                if (mousePosition.y <= edgePanBorder)
                 {
                     vertical -= 1f;
                 }
-                else if (Input.mousePosition.y >= Screen.height - edgePanBorder)
+                else if (mousePosition.y >= Screen.height - edgePanBorder)
                 {
                     vertical += 1f;
                 }
@@ -94,17 +99,17 @@ namespace CityBuilder.Unity
 
         private void HandleRotate()
         {
-            if (Input.GetMouseButton(2))
+            if (IsMiddleMousePressed())
             {
-                _yaw += Input.GetAxis("Mouse X") * rotationSpeed * Time.deltaTime;
-                _pitch -= Input.GetAxis("Mouse Y") * rotationSpeed * Time.deltaTime;
+                _yaw += GetMouseDeltaX() * rotationSpeed * Time.deltaTime;
+                _pitch -= GetMouseDeltaY() * rotationSpeed * Time.deltaTime;
             }
 
-            if (Input.GetKey(KeyCode.Q))
+            if (IsRotateLeftPressed())
             {
                 _yaw -= rotationSpeed * 0.55f * Time.deltaTime;
             }
-            else if (Input.GetKey(KeyCode.E))
+            else if (IsRotateRightPressed())
             {
                 _yaw += rotationSpeed * 0.55f * Time.deltaTime;
             }
@@ -114,7 +119,7 @@ namespace CityBuilder.Unity
 
         private void HandleZoom()
         {
-            var wheel = Input.GetAxis("Mouse ScrollWheel");
+            var wheel = GetMouseScroll();
             if (Mathf.Approximately(wheel, 0f))
             {
                 return;
@@ -143,5 +148,72 @@ namespace CityBuilder.Unity
         {
             return pitch > 180f ? pitch - 360f : pitch;
         }
+
+#if ENABLE_INPUT_SYSTEM
+        private static float GetHorizontalAxis()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null) return 0f;
+            var value = 0f;
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) value -= 1f;
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) value += 1f;
+            return value;
+        }
+
+        private static float GetVerticalAxis()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null) return 0f;
+            var value = 0f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) value -= 1f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) value += 1f;
+            return value;
+        }
+
+        private static Vector2 GetMousePosition()
+        {
+            return Mouse.current?.position.ReadValue() ?? Vector2.zero;
+        }
+
+        private static bool IsMiddleMousePressed()
+        {
+            return Mouse.current?.middleButton.isPressed ?? false;
+        }
+
+        private static float GetMouseDeltaX()
+        {
+            return Mouse.current?.delta.ReadValue().x ?? 0f;
+        }
+
+        private static float GetMouseDeltaY()
+        {
+            return Mouse.current?.delta.ReadValue().y ?? 0f;
+        }
+
+        private static float GetMouseScroll()
+        {
+            return (Mouse.current?.scroll.ReadValue().y ?? 0f) * 0.01f;
+        }
+
+        private static bool IsRotateLeftPressed()
+        {
+            return Keyboard.current?.qKey.isPressed ?? false;
+        }
+
+        private static bool IsRotateRightPressed()
+        {
+            return Keyboard.current?.eKey.isPressed ?? false;
+        }
+#else
+        private static float GetHorizontalAxis() => Input.GetAxisRaw("Horizontal");
+        private static float GetVerticalAxis() => Input.GetAxisRaw("Vertical");
+        private static Vector2 GetMousePosition() => Input.mousePosition;
+        private static bool IsMiddleMousePressed() => Input.GetMouseButton(2);
+        private static float GetMouseDeltaX() => Input.GetAxis("Mouse X");
+        private static float GetMouseDeltaY() => Input.GetAxis("Mouse Y");
+        private static float GetMouseScroll() => Input.GetAxis("Mouse ScrollWheel");
+        private static bool IsRotateLeftPressed() => Input.GetKey(KeyCode.Q);
+        private static bool IsRotateRightPressed() => Input.GetKey(KeyCode.E);
+#endif
     }
 }
