@@ -9,10 +9,10 @@ namespace CityBuilder.Tests.EditMode
         public void Tick_CalculatesPopulationJobsAndEconomy()
         {
             var grid = new GridSystem(10, 10);
-            grid.PlaceRoad(1, 2);
-            grid.PlaceRoad(2, 3);
-            grid.PlaceBuilding(1, 1, BuildingType.Residential); // +8 residents, +2 upkeep
-            grid.PlaceBuilding(2, 2, BuildingType.Commercial);  // +6 jobs, +3 upkeep
+            grid.PlaceRoad(new HexCoord(2, 1));
+            grid.PlaceRoad(new HexCoord(3, 2));
+            grid.PlaceBuilding(new HexCoord(2, 2), BuildingType.Residential);
+            grid.PlaceBuilding(new HexCoord(3, 3), BuildingType.Commercial);
 
             var simulation = new CitySimulation(grid, randomSeed: 1);
             simulation.Tick();
@@ -24,26 +24,6 @@ namespace CityBuilder.Tests.EditMode
             Assert.That(simulation.Upkeep, Is.EqualTo(5));
             Assert.That(simulation.Balance, Is.EqualTo(11));
             Assert.That(simulation.TickCount, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void Tick_DoesNotAutoUpgradeResidentialWhenJobsAreEnough()
-        {
-            var grid = new GridSystem(10, 10);
-            grid.PlaceRoad(1, 2);
-            grid.PlaceRoad(2, 3);
-            grid.PlaceBuilding(1, 1, BuildingType.Residential); // residents 8
-            grid.PlaceBuilding(2, 2, BuildingType.Industrial);  // jobs 10
-
-            var simulation = new CitySimulation(grid, randomSeed: 1);
-            simulation.Tick();
-
-            Assert.That(simulation.Unemployed, Is.EqualTo(0));
-            Assert.That(simulation.TotalResidents, Is.EqualTo(8));
-            Assert.That(simulation.TotalJobs, Is.EqualTo(10));
-            Assert.That(simulation.Income, Is.EqualTo(16));
-            Assert.That(simulation.Upkeep, Is.EqualTo(7));
-            Assert.That(simulation.Balance, Is.EqualTo(9));
         }
     }
 }

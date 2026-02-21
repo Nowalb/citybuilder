@@ -1,32 +1,32 @@
+using System;
 using System.Collections.Generic;
 
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Pure simulation grid container. Buildings require adjacency to roads.
+    /// Pure simulation hex grid backed by Dictionary for scalable sparse/chunked growth.
     /// </summary>
     public sealed class GridSystem
     {
         public readonly struct BuildingPlacement
         {
-            public BuildingPlacement(Building building, int x, int y)
+            public BuildingPlacement(Building building, HexCoord coord)
             {
                 Building = building;
-                X = x;
-                Y = y;
+                Coord = coord;
             }
 
             public Building Building { get; }
-            public int X { get; }
-            public int Y { get; }
+            public HexCoord Coord { get; }
         }
 
-        private readonly Tile[,] _tiles;
+        private readonly Dictionary<HexCoord, Tile> _tiles;
         private readonly List<Building> _buildings;
         private readonly List<BuildingPlacement> _placements;
 
         public int Width { get; }
         public int Height { get; }
+        public IReadOnlyCollection<Tile> Tiles => _tiles.Values;
         public IReadOnlyList<Building> Buildings => _buildings;
         public IReadOnlyList<BuildingPlacement> Placements => _placements;
 
@@ -34,42 +34,41 @@ namespace CityBuilder.Simulation
         {
             Width = width;
             Height = height;
-            _tiles = new Tile[Width, Height];
+            _tiles = new Dictionary<HexCoord, Tile>(width * height);
             _buildings = new List<Building>();
             _placements = new List<BuildingPlacement>();
 
-            for (var x = 0; x < Width; x++)
+            for (var q = 0; q < Width; q++)
             {
-                for (var y = 0; y < Height; y++)
+                for (var r = 0; r < Height; r++)
                 {
-                    _tiles[x, y] = new Tile(x, y);
+                    var coord = new HexCoord(q, r);
+                    _tiles[coord] = new Tile(coord);
                 }
             }
         }
 
-        public Tile GetTile(int x, int y)
+        public Tile GetTile(HexCoord coord)
         {
-            return IsInBounds(x, y) ? _tiles[x, y] : null;
+            return _tiles.TryGetValue(coord, out var tile) ? tile : null;
         }
 
-        public bool PlaceRoad(int x, int y)
+        public bool Contains(HexCoord coord) => _tiles.ContainsKey(coord);
+
+        public bool PlaceRoad(HexCoord coord)
         {
-            if (!IsInBounds(x, y))
+            var tile = GetTile(coord);
+            return tile != null && tile.TrySetRoad();
+        }
+
+        public bool PlaceBuilding(HexCoord coord, BuildingType type)
+        {
+            if (!IsBuildableTile(coord) || type == BuildingType.Empty || !HasAdjacentRoad(coord))
             {
                 return false;
             }
 
-            return _tiles[x, y].TrySetRoad();
-        }
-
-        public bool PlaceBuilding(int x, int y, BuildingType type)
-        {
-            if (!IsBuildableTile(x, y) || type == BuildingType.Empty || !HasAdjacentRoad(x, y))
-            {
-                return false;
-            }
-
-            var tile = _tiles[x, y];
+            var tile = _tiles[coord];
             var building = new Building(type);
 
             if (!tile.TryPlaceBuilding(building))
@@ -78,69 +77,78 @@ namespace CityBuilder.Simulation
             }
 
             _buildings.Add(building);
-            _placements.Add(new BuildingPlacement(building, x, y));
+            _placements.Add(new BuildingPlacement(building, coord));
             return true;
         }
 
-        public bool HasAdjacentRoad(int x, int y)
+        public List<Tile> GetNeighbors(HexCoord coord)
         {
-            return IsRoadAt(x + 1, y) || IsRoadAt(x - 1, y) || IsRoadAt(x, y + 1) || IsRoadAt(x, y - 1);
+            var result = new List<Tile>(6);
+            foreach (var neighborCoord in coord.GetNeighbors())
+            {
+                if (_tiles.TryGetValue(neighborCoord, out var tile))
+                {
+                    result.Add(tile);
+                }
+            }
+
+            return result;
         }
 
-        public bool TryGetAdjacentRoad(int x, int y, out int roadX, out int roadY)
+        public bool HasAdjacentRoad(HexCoord coord)
         {
-            if (IsRoadAt(x + 1, y))
+            foreach (var neighbor in GetNeighbors(coord))
             {
-                roadX = x + 1;
-                roadY = y;
-                return true;
+                if (neighbor.IsRoad)
+                {
+                    return true;
+                }
             }
 
-            if (IsRoadAt(x - 1, y))
-            {
-                roadX = x - 1;
-                roadY = y;
-                return true;
-            }
-
-            if (IsRoadAt(x, y + 1))
-            {
-                roadX = x;
-                roadY = y + 1;
-                return true;
-            }
-
-            if (IsRoadAt(x, y - 1))
-            {
-                roadX = x;
-                roadY = y - 1;
-                return true;
-            }
-
-            roadX = -1;
-            roadY = -1;
             return false;
         }
 
-        private bool IsRoadAt(int x, int y)
+        public bool TryGetAdjacentRoad(HexCoord coord, out HexCoord roadCoord)
         {
-            return IsInBounds(x, y) && _tiles[x, y].IsRoad;
-        }
-
-        private bool IsBuildableTile(int x, int y)
-        {
-            if (!IsInBounds(x, y))
+            foreach (var neighbor in GetNeighbors(coord))
             {
-                return false;
+                if (neighbor.IsRoad)
+                {
+                    roadCoord = neighbor.Coord;
+                    return true;
+                }
             }
 
-            var tile = _tiles[x, y];
-            return !tile.IsRoad && !tile.HasBuilding;
+            roadCoord = default;
+            return false;
         }
 
-        private bool IsInBounds(int x, int y)
+        public int Distance(HexCoord a, HexCoord b)
         {
-            return x >= 0 && x < Width && y >= 0 && y < Height;
+            var dq = a.Q - b.Q;
+            var dr = a.R - b.R;
+            var ds = (-a.Q - a.R) - (-b.Q - b.R);
+            return (Math.Abs(dq) + Math.Abs(dr) + Math.Abs(ds)) / 2;
+        }
+
+        public List<Tile> GetTilesInRange(HexCoord center, int radius)
+        {
+            var result = new List<Tile>();
+            foreach (var tile in _tiles.Values)
+            {
+                if (Distance(center, tile.Coord) <= radius)
+                {
+                    result.Add(tile);
+                }
+            }
+
+            return result;
+        }
+
+        private bool IsBuildableTile(HexCoord coord)
+        {
+            var tile = GetTile(coord);
+            return tile != null && !tile.IsRoad && !tile.HasBuilding;
         }
     }
 }

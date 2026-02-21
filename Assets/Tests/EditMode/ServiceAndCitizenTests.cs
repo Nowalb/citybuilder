@@ -9,20 +9,20 @@ namespace CityBuilder.Tests.EditMode
         [Test]
         public void Tick_ComputesSafetyAndHealthIndicators()
         {
-            var grid = new GridSystem(12, 12);
-            for (var x = 0; x < 12; x++)
+            var grid = new GridSystem(20, 20);
+
+            for (var q = 0; q < 20; q++)
             {
-                grid.PlaceRoad(x, 1);
-                grid.PlaceRoad(x, 2);
+                grid.PlaceRoad(new HexCoord(q, 5));
             }
 
-            grid.PlaceBuilding(2, 2, BuildingType.Residential);
-            grid.PlaceBuilding(3, 2, BuildingType.Residential);
-            grid.PlaceBuilding(4, 2, BuildingType.Industrial);
-            grid.PlaceBuilding(5, 2, BuildingType.Commercial);
-            grid.PlaceBuilding(6, 2, BuildingType.PoliceStation);
-            grid.PlaceBuilding(7, 2, BuildingType.FireStation);
-            grid.PlaceBuilding(8, 2, BuildingType.Hospital);
+            grid.PlaceBuilding(new HexCoord(6, 6), BuildingType.Residential);
+            grid.PlaceBuilding(new HexCoord(7, 6), BuildingType.Residential);
+            grid.PlaceBuilding(new HexCoord(8, 6), BuildingType.Industrial);
+            grid.PlaceBuilding(new HexCoord(9, 6), BuildingType.Commercial);
+            grid.PlaceBuilding(new HexCoord(10, 6), BuildingType.PoliceStation);
+            grid.PlaceBuilding(new HexCoord(11, 6), BuildingType.FireStation);
+            grid.PlaceBuilding(new HexCoord(12, 6), BuildingType.Hospital);
 
             var simulation = new CitySimulation(grid, 1);
             simulation.Tick();
@@ -35,22 +35,17 @@ namespace CityBuilder.Tests.EditMode
         [Test]
         public void Citizens_MoveOnRoadTilesOnly()
         {
-            var grid = new GridSystem(15, 15);
-            for (var x = 0; x < 15; x++)
+            var grid = new GridSystem(20, 20);
+            for (var q = 0; q < 20; q++)
             {
-                grid.PlaceRoad(x, 1);
-                grid.PlaceRoad(x, 5);
-            }
-            for (var y = 0; y < 15; y++)
-            {
-                grid.PlaceRoad(1, y);
-                grid.PlaceRoad(5, y);
+                grid.PlaceRoad(new HexCoord(q, 5));
+                grid.PlaceRoad(new HexCoord(q, 6));
             }
 
-            grid.PlaceBuilding(2, 2, BuildingType.Residential);
-            grid.PlaceBuilding(3, 2, BuildingType.Residential);
-            grid.PlaceBuilding(2, 4, BuildingType.Industrial);
-            grid.PlaceBuilding(4, 4, BuildingType.Commercial);
+            grid.PlaceBuilding(new HexCoord(6, 6), BuildingType.Residential);
+            grid.PlaceBuilding(new HexCoord(7, 6), BuildingType.Residential);
+            grid.PlaceBuilding(new HexCoord(8, 6), BuildingType.Industrial);
+            grid.PlaceBuilding(new HexCoord(9, 6), BuildingType.Commercial);
 
             var simulation = new CitySimulation(grid, 1);
             for (var i = 0; i < 8; i++)
@@ -59,7 +54,7 @@ namespace CityBuilder.Tests.EditMode
             }
 
             Assert.That(simulation.Citizens.Count, Is.GreaterThan(0));
-            Assert.That(simulation.Citizens.All(c => grid.GetTile(c.RoadX, c.RoadY).IsRoad), Is.True);
+            Assert.That(simulation.Citizens.All(c => grid.GetTile(c.RoadCoord).IsRoad), Is.True);
         }
     }
 }

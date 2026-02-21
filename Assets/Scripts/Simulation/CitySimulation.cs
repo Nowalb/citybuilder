@@ -37,7 +37,6 @@ namespace CityBuilder.Simulation
         {
             TickCount++;
             CalculateStats();
-
             SyncCitizensToPopulation();
             MoveCitizens();
         }
@@ -62,21 +61,11 @@ namespace CityBuilder.Simulation
 
                 switch (building.BuildingType)
                 {
-                    case BuildingType.PoliceStation:
-                        policeCount++;
-                        break;
-                    case BuildingType.FireStation:
-                        fireStationCount++;
-                        break;
-                    case BuildingType.Hospital:
-                        hospitalCount++;
-                        break;
-                    case BuildingType.Industrial:
-                        industrialCount++;
-                        break;
-                    case BuildingType.Commercial:
-                        commercialCount++;
-                        break;
+                    case BuildingType.PoliceStation: policeCount++; break;
+                    case BuildingType.FireStation: fireStationCount++; break;
+                    case BuildingType.Hospital: hospitalCount++; break;
+                    case BuildingType.Industrial: industrialCount++; break;
+                    case BuildingType.Commercial: commercialCount++; break;
                 }
             }
 
@@ -88,6 +77,7 @@ namespace CityBuilder.Simulation
             FireRiskIndex = Clamp01((industrialCount * 0.06f) + (commercialCount * 0.03f) + (TotalResidents / 1000f) - (fireStationCount * 0.20f)) * 100f;
             HealthIndex = Clamp01(0.45f + (hospitalCount * 0.18f) - (CrimeIndex / 200f) - (FireRiskIndex / 250f)) * 100f;
         }
+
         private void SyncCitizensToPopulation()
         {
             var targetCount = Math.Min(TotalResidents, 400);
@@ -126,16 +116,16 @@ namespace CityBuilder.Simulation
 
             while (_citizens.Count < targetCount)
             {
-                var home = residences[_random.Next(residences.Count)];
-                var work = workplaces[_random.Next(workplaces.Count)];
-                var shop = shops[_random.Next(shops.Count)];
+                var home = residences[_random.Next(residences.Count)].Coord;
+                var work = workplaces[_random.Next(workplaces.Count)].Coord;
+                var shop = shops[_random.Next(shops.Count)].Coord;
 
-                if (!_gridSystem.TryGetAdjacentRoad(home.X, home.Y, out var roadX, out var roadY))
+                if (!_gridSystem.TryGetAdjacentRoad(home, out var road))
                 {
                     break;
                 }
 
-                var citizen = new Citizen(home.X, home.Y, work.X, work.Y, shop.X, shop.Y, roadX, roadY);
+                var citizen = new Citizen(home, work, shop, road);
                 SetCitizenTarget(citizen);
                 _citizens.Add(citizen);
             }
@@ -151,8 +141,7 @@ namespace CityBuilder.Simulation
                     SetCitizenTarget(citizen);
                 }
 
-                var next = CalculateNextRoadStep(citizen.RoadX, citizen.RoadY, citizen);
-                citizen.Step(next.x, next.y);
+                citizen.Step(CalculateNextRoadStep(citizen.RoadCoord, citizen.TargetRoadCoord));
             }
         }
 
@@ -160,70 +149,45 @@ namespace CityBuilder.Simulation
         {
             var destination = citizen.CurrentPhase switch
             {
-                0 => (citizen.WorkX, citizen.WorkY),
-                1 => (citizen.ShopX, citizen.ShopY),
-                _ => (citizen.HomeX, citizen.HomeY)
+                0 => citizen.WorkCoord,
+                1 => citizen.ShopCoord,
+                _ => citizen.HomeCoord
             };
 
-            if (_gridSystem.TryGetAdjacentRoad(destination.Item1, destination.Item2, out var roadX, out var roadY))
+            if (_gridSystem.TryGetAdjacentRoad(destination, out var road))
             {
-                citizen.SetTargetRoad(roadX, roadY);
+                citizen.SetTargetRoad(road);
             }
         }
 
-        private (int x, int y) CalculateNextRoadStep(int currentX, int currentY, Citizen citizen)
+        private HexCoord CalculateNextRoadStep(HexCoord current, HexCoord target)
         {
-            // Move along roads only. Works well with the orthogonal road network.
-            if (TryStepToward(currentX, currentY, currentX + Math.Sign(citizen.TargetRoadX - currentX), currentY, out var nextX, out var nextY))
+            var neighbors = _gridSystem.GetNeighbors(current);
+            HexCoord best = current;
+            var bestDist = int.MaxValue;
+
+            foreach (var neighbor in neighbors)
             {
-                return (nextX, nextY);
+                if (!neighbor.IsRoad)
+                {
+                    continue;
+                }
+
+                var d = _gridSystem.Distance(neighbor.Coord, target);
+                if (d < bestDist)
+                {
+                    best = neighbor.Coord;
+                    bestDist = d;
+                }
             }
 
-            if (TryStepToward(currentX, currentY, currentX, currentY + Math.Sign(citizen.TargetRoadY - currentY), out nextX, out nextY))
-            {
-                return (nextX, nextY);
-            }
-
-            if (TryStepToward(currentX, currentY, currentX + 1, currentY, out nextX, out nextY) ||
-                TryStepToward(currentX, currentY, currentX - 1, currentY, out nextX, out nextY) ||
-                TryStepToward(currentX, currentY, currentX, currentY + 1, out nextX, out nextY) ||
-                TryStepToward(currentX, currentY, currentX, currentY - 1, out nextX, out nextY))
-            {
-                return (nextX, nextY);
-            }
-
-            return (currentX, currentY);
+            return best;
         }
 
         private static float Clamp01(float value)
         {
-            if (value < 0f)
-            {
-                return 0f;
-            }
-
+            if (value < 0f) return 0f;
             return value > 1f ? 1f : value;
-        }
-
-        private bool TryStepToward(int currentX, int currentY, int candidateX, int candidateY, out int nextX, out int nextY)
-        {
-            nextX = currentX;
-            nextY = currentY;
-
-            if (candidateX == currentX && candidateY == currentY)
-            {
-                return false;
-            }
-
-            var tile = _gridSystem.GetTile(candidateX, candidateY);
-            if (tile == null || !tile.IsRoad)
-            {
-                return false;
-            }
-
-            nextX = candidateX;
-            nextY = candidateY;
-            return true;
         }
     }
 }

@@ -5,16 +5,14 @@ namespace CityBuilder.Simulation
     /// </summary>
     public sealed class Tile
     {
-        public int X { get; }
-        public int Y { get; }
+        public HexCoord Coord { get; }
         public bool IsRoad { get; private set; }
         public Building Building { get; private set; }
         public bool HasBuilding => Building != null;
 
-        public Tile(int x, int y)
+        public Tile(HexCoord coord)
         {
-            X = x;
-            Y = y;
+            Coord = coord;
         }
 
         public bool TrySetRoad()

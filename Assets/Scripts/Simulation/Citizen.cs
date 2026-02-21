@@ -1,43 +1,30 @@
 namespace CityBuilder.Simulation
 {
     /// <summary>
-    /// Lightweight citizen model moving on road tiles.
+    /// Lightweight citizen model moving on road hexes.
     /// </summary>
     public sealed class Citizen
     {
-        public int RoadX { get; private set; }
-        public int RoadY { get; private set; }
-
-        public int HomeX { get; }
-        public int HomeY { get; }
-        public int WorkX { get; }
-        public int WorkY { get; }
-        public int ShopX { get; }
-        public int ShopY { get; }
-
-        public int TargetRoadX { get; private set; }
-        public int TargetRoadY { get; private set; }
+        public HexCoord RoadCoord { get; private set; }
+        public HexCoord HomeCoord { get; }
+        public HexCoord WorkCoord { get; }
+        public HexCoord ShopCoord { get; }
+        public HexCoord TargetRoadCoord { get; private set; }
 
         private int _phase;
 
-        public Citizen(int homeX, int homeY, int workX, int workY, int shopX, int shopY, int roadX, int roadY)
+        public Citizen(HexCoord homeCoord, HexCoord workCoord, HexCoord shopCoord, HexCoord roadCoord)
         {
-            HomeX = homeX;
-            HomeY = homeY;
-            WorkX = workX;
-            WorkY = workY;
-            ShopX = shopX;
-            ShopY = shopY;
-            RoadX = roadX;
-            RoadY = roadY;
-            TargetRoadX = roadX;
-            TargetRoadY = roadY;
+            HomeCoord = homeCoord;
+            WorkCoord = workCoord;
+            ShopCoord = shopCoord;
+            RoadCoord = roadCoord;
+            TargetRoadCoord = roadCoord;
         }
 
-        public void SetTargetRoad(int x, int y)
+        public void SetTargetRoad(HexCoord coord)
         {
-            TargetRoadX = x;
-            TargetRoadY = y;
+            TargetRoadCoord = coord;
         }
 
         public void AdvancePhase()
@@ -49,13 +36,12 @@ namespace CityBuilder.Simulation
 
         public bool IsAtTarget()
         {
-            return RoadX == TargetRoadX && RoadY == TargetRoadY;
+            return RoadCoord.Equals(TargetRoadCoord);
         }
 
-        public void Step(int nextX, int nextY)
+        public void Step(HexCoord next)
         {
-            RoadX = nextX;
-            RoadY = nextY;
+            RoadCoord = next;
         }
     }
 }

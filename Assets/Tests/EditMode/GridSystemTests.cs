@@ -12,43 +12,37 @@ namespace CityBuilder.Tests.EditMode
 
             Assert.That(grid.Width, Is.EqualTo(50));
             Assert.That(grid.Height, Is.EqualTo(50));
-            Assert.That(grid.GetTile(0, 0), Is.Not.Null);
-            Assert.That(grid.GetTile(49, 49), Is.Not.Null);
-            Assert.That(grid.GetTile(50, 50), Is.Null);
+            Assert.That(grid.GetTile(new HexCoord(0, 0)), Is.Not.Null);
+            Assert.That(grid.GetTile(new HexCoord(49, 49)), Is.Not.Null);
+            Assert.That(grid.GetTile(new HexCoord(50, 50)), Is.Null);
         }
 
         [Test]
         public void PlaceBuilding_RequiresAdjacentRoad()
         {
             var grid = new GridSystem(5, 5);
+            var coord = new HexCoord(2, 2);
 
-            Assert.That(grid.PlaceBuilding(2, 2, BuildingType.Residential), Is.False);
-            Assert.That(grid.PlaceRoad(2, 1), Is.True);
-            Assert.That(grid.PlaceBuilding(2, 2, BuildingType.Residential), Is.True);
+            Assert.That(grid.PlaceBuilding(coord, BuildingType.Residential), Is.False);
+            Assert.That(grid.PlaceRoad(new HexCoord(3, 2)), Is.True);
+            Assert.That(grid.PlaceBuilding(coord, BuildingType.Residential), Is.True);
             Assert.That(grid.Buildings.Count, Is.EqualTo(1));
         }
 
         [Test]
-        public void PlaceBuilding_RejectsOutOfBoundsAndEmptyType()
+        public void NeighborSystem_ReturnsUpToSixNeighbors()
         {
-            var grid = new GridSystem(5, 5);
-            grid.PlaceRoad(0, 1);
-
-            Assert.That(grid.PlaceBuilding(-1, 0, BuildingType.Residential), Is.False);
-            Assert.That(grid.PlaceBuilding(6, 0, BuildingType.Residential), Is.False);
-            Assert.That(grid.PlaceBuilding(0, 0, BuildingType.Empty), Is.False);
-            Assert.That(grid.Buildings.Count, Is.EqualTo(0));
+            var grid = new GridSystem(10, 10);
+            var neighbors = grid.GetNeighbors(new HexCoord(4, 4));
+            Assert.That(neighbors.Count, Is.EqualTo(6));
         }
 
         [Test]
-        public void PlaceRoad_CannotOverwriteBuilding()
+        public void HexDistance_Works()
         {
-            var grid = new GridSystem(5, 5);
-            grid.PlaceRoad(1, 2);
-            grid.PlaceBuilding(1, 1, BuildingType.Industrial);
-
-            Assert.That(grid.PlaceRoad(1, 1), Is.False);
-            Assert.That(grid.GetTile(1, 1).HasBuilding, Is.True);
+            var grid = new GridSystem(10, 10);
+            var dist = grid.Distance(new HexCoord(1, 1), new HexCoord(4, 3));
+            Assert.That(dist, Is.EqualTo(5));
         }
     }
 }

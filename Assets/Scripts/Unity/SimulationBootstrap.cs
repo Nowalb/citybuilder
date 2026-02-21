@@ -5,171 +5,194 @@ using UnityEngine;
 namespace CityBuilder.Unity
 {
     /// <summary>
-    /// Unity adapter: drives simulation, rendering and manual city-builder placement tools.
+    /// Unity adapter: drives pure simulation tick, hex rendering and placement hooks.
     /// </summary>
     public sealed class SimulationBootstrap : MonoBehaviour
     {
-        private enum BuildTool
-        {
-            Road,
-            Residential,
-            Industrial,
-            Commercial,
-            PoliceStation,
-            FireStation,
-            Hospital
-        }
-
-        [Header("Grid")]
+        [Header("Hex Grid")]
         [SerializeField] private int width = 50;
         [SerializeField] private int height = 50;
-        [SerializeField] private float tileSize = 1f;
+        [SerializeField] private float hexSize = 1f;
+        [SerializeField] private Material roadMaterial;
+        [SerializeField] private Material groundMaterial;
 
         [Header("Simulation")]
         [SerializeField] private float tickIntervalSeconds = 1f;
-
-        [Header("Citizens")]
         [SerializeField] private int maxCitizenDots = 300;
 
         private GridSystem _grid;
         private CitySimulation _simulation;
+        private readonly Dictionary<HexCoord, GameObject> _hexViews = new();
         private readonly Dictionary<Building, GameObject> _buildingViews = new();
         private readonly Dictionary<Citizen, GameObject> _citizenViews = new();
-        private readonly Dictionary<GameObject, Vector2Int> _tilePositionsByView = new();
+        private readonly Dictionary<int, List<HexCoord>> _chunks = new();
 
-        private BuildTool _activeTool = BuildTool.Road;
+        private Camera _mainCamera;
         private float _elapsed;
 
         private void Start()
         {
+            _mainCamera = Camera.main;
             _grid = new GridSystem(width, height);
             _simulation = new CitySimulation(_grid);
 
             GenerateRoadNetwork();
-            GenerateTileViews();
-            RefreshBuildingViews();
-            RefreshCitizenViews();
+            GenerateHexTileViews();
+            RefreshViews();
             RunTick();
         }
 
         private void Update()
         {
-            HandlePlacementInput();
-
             _elapsed += Time.deltaTime;
             while (_elapsed >= tickIntervalSeconds)
             {
                 _elapsed -= tickIntervalSeconds;
                 RunTick();
-                RefreshBuildingViews();
-                RefreshCitizenViews();
+                RefreshViews();
             }
         }
 
-        private void HandlePlacementInput()
+        public bool TryPickHex(Vector2 screenPosition, out HexCoord coord)
         {
-            if (!IsPlacePressed())
+            coord = default;
+            if (_mainCamera == null)
             {
-                return;
+                _mainCamera = Camera.main;
             }
 
-            if (!TryGetHoveredTilePosition(out var position))
-            {
-                return;
-            }
-
-            var success = _activeTool == BuildTool.Road
-                ? _grid.PlaceRoad(position.x, position.y)
-                : _grid.PlaceBuilding(position.x, position.y, ConvertToolToBuildingType(_activeTool));
-
-            if (!success)
-            {
-                return;
-            }
-
-            UpdateTileColor(position.x, position.y);
-            RefreshBuildingViews();
-        }
-
-        private bool TryGetHoveredTilePosition(out Vector2Int tilePosition)
-        {
-            tilePosition = default;
-            var ray = Camera.main.ScreenPointToRay(GetPointerScreenPosition());
-
-            if (!Physics.Raycast(ray, out var hit, 500f))
+            if (_mainCamera == null)
             {
                 return false;
             }
 
-            return _tilePositionsByView.TryGetValue(hit.collider.gameObject, out tilePosition);
+            var ray = _mainCamera.ScreenPointToRay(screenPosition);
+            var plane = new Plane(Vector3.up, Vector3.zero);
+
+            if (!plane.Raycast(ray, out var enter))
+            {
+                return false;
+            }
+
+            var world = ray.GetPoint(enter);
+            var snapped = HexGridMath.WorldToHex(world, hexSize);
+            if (!_grid.Contains(snapped))
+            {
+                return false;
+            }
+
+            coord = snapped;
+            return true;
+        }
+
+        public bool PlaceRoad(HexCoord coord)
+        {
+            var ok = _grid.PlaceRoad(coord);
+            if (ok)
+            {
+                UpdateHexColor(coord);
+            }
+
+            return ok;
+        }
+
+        public bool PlaceBuilding(HexCoord coord, BuildingType buildingType)
+        {
+            return _grid.PlaceBuilding(coord, buildingType);
+        }
+
+        public void RefreshViews()
+        {
+            RefreshBuildingViews();
+            RefreshCitizenViews();
         }
 
         private void GenerateRoadNetwork()
         {
-            for (var x = 0; x < width; x++)
+            for (var q = 0; q < width; q++)
             {
-                _grid.PlaceRoad(x, 0);
-                _grid.PlaceRoad(x, height - 1);
+                PlaceRoad(new HexCoord(q, 0));
+                PlaceRoad(new HexCoord(q, height - 1));
+            }
 
-                if (x % 5 == 0)
+            for (var r = 0; r < height; r++)
+            {
+                PlaceRoad(new HexCoord(0, r));
+                PlaceRoad(new HexCoord(width - 1, r));
+            }
+
+            for (var q = 0; q < width; q += 5)
+            {
+                for (var r = 0; r < height; r++)
                 {
-                    for (var y = 0; y < height; y++)
-                    {
-                        _grid.PlaceRoad(x, y);
-                    }
+                    PlaceRoad(new HexCoord(q, r));
                 }
             }
 
-            for (var y = 0; y < height; y++)
+            for (var r = 0; r < height; r += 5)
             {
-                _grid.PlaceRoad(0, y);
-                _grid.PlaceRoad(width - 1, y);
-
-                if (y % 5 == 0)
+                for (var q = 0; q < width; q++)
                 {
-                    for (var x = 0; x < width; x++)
-                    {
-                        _grid.PlaceRoad(x, y);
-                    }
+                    PlaceRoad(new HexCoord(q, r));
                 }
             }
         }
 
-        private void GenerateTileViews()
+        private void GenerateHexTileViews()
         {
-            var root = new GameObject("GridRoot");
+            var root = new GameObject("HexGridRoot");
             root.transform.SetParent(transform, false);
 
-            for (var x = 0; x < width; x++)
+            foreach (var tile in _grid.Tiles)
             {
-                for (var y = 0; y < height; y++)
-                {
-                    var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    tile.name = $"Tile_{x}_{y}";
-                    tile.transform.SetParent(root.transform, false);
-                    tile.transform.position = new Vector3(x * tileSize, 0f, y * tileSize);
-                    tile.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                    tile.transform.localScale = Vector3.one * tileSize;
+                var hexGo = new GameObject($"Hex_{tile.Coord.Q}_{tile.Coord.R}");
+                hexGo.transform.SetParent(root.transform, false);
+                hexGo.transform.position = HexGridMath.HexToWorldPosition(tile.Coord, hexSize);
 
-                    _tilePositionsByView.Add(tile, new Vector2Int(x, y));
-                    UpdateTileColor(x, y);
+                var meshFilter = hexGo.AddComponent<MeshFilter>();
+                var meshRenderer = hexGo.AddComponent<MeshRenderer>();
+                var meshCollider = hexGo.AddComponent<MeshCollider>();
+
+                var mesh = CreatePointyTopHexMesh(hexSize);
+                meshFilter.mesh = mesh;
+                meshCollider.sharedMesh = mesh;
+
+                meshRenderer.material = tile.IsRoad && roadMaterial != null
+                    ? roadMaterial
+                    : (groundMaterial != null ? groundMaterial : new Material(Shader.Find("Universal Render Pipeline/Lit")));
+
+                _hexViews[tile.Coord] = hexGo;
+
+                var chunkId = HexGridMath.GetChunkId(tile.Coord, 10);
+                if (!_chunks.TryGetValue(chunkId, out var list))
+                {
+                    list = new List<HexCoord>();
+                    _chunks[chunkId] = list;
                 }
+                list.Add(tile.Coord);
             }
         }
 
-        private void UpdateTileColor(int x, int y)
+        private void UpdateHexColor(HexCoord coord)
         {
-            foreach (var kv in _tilePositionsByView)
+            if (!_hexViews.TryGetValue(coord, out var hexGo))
             {
-                if (kv.Value.x != x || kv.Value.y != y)
-                {
-                    continue;
-                }
-
-                var tile = _grid.GetTile(x, y);
-                var renderer = kv.Key.GetComponent<Renderer>();
-                renderer.material.color = tile != null && tile.IsRoad ? Color.gray : new Color(0.22f, 0.24f, 0.22f);
                 return;
+            }
+
+            var tile = _grid.GetTile(coord);
+            var renderer = hexGo.GetComponent<MeshRenderer>();
+            if (tile != null && tile.IsRoad && roadMaterial != null)
+            {
+                renderer.material = roadMaterial;
+            }
+            else if (groundMaterial != null)
+            {
+                renderer.material = groundMaterial;
+            }
+            else
+            {
+                renderer.material.color = tile != null && tile.IsRoad ? Color.gray : new Color(0.22f, 0.24f, 0.22f);
             }
         }
 
@@ -181,18 +204,20 @@ namespace CityBuilder.Unity
                 if (_buildingViews.TryGetValue(building, out var view))
                 {
                     var heightScale = 0.5f + building.Level * 0.4f;
-                    view.transform.localScale = new Vector3(tileSize * 0.8f, heightScale, tileSize * 0.8f);
-                    view.transform.position = new Vector3(placement.X * tileSize, heightScale * 0.5f, placement.Y * tileSize);
+                    var world = HexGridMath.HexToWorldPosition(placement.Coord, hexSize);
+                    view.transform.localScale = new Vector3(hexSize * 1.4f, heightScale, hexSize * 1.4f);
+                    view.transform.position = new Vector3(world.x, heightScale * 0.5f, world.z);
                     continue;
                 }
 
-                var buildingGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                buildingGo.name = $"Building_{building.BuildingType}_{placement.X}_{placement.Y}";
+                var buildingGo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                buildingGo.name = $"Building_{building.BuildingType}_{placement.Coord.Q}_{placement.Coord.R}";
                 buildingGo.transform.SetParent(transform, false);
 
                 var initialHeight = 0.5f + building.Level * 0.4f;
-                buildingGo.transform.localScale = new Vector3(tileSize * 0.8f, initialHeight, tileSize * 0.8f);
-                buildingGo.transform.position = new Vector3(placement.X * tileSize, initialHeight * 0.5f, placement.Y * tileSize);
+                var worldPos = HexGridMath.HexToWorldPosition(placement.Coord, hexSize);
+                buildingGo.transform.localScale = new Vector3(hexSize * 0.65f, initialHeight * 0.5f, hexSize * 0.65f);
+                buildingGo.transform.position = new Vector3(worldPos.x, initialHeight * 0.5f, worldPos.z);
                 buildingGo.GetComponent<Renderer>().material.color = ResolveBuildingColor(building.BuildingType);
 
                 _buildingViews.Add(building, buildingGo);
@@ -214,13 +239,14 @@ namespace CityBuilder.Unity
                     view = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     view.name = "CitizenDot";
                     view.transform.SetParent(transform, false);
-                    view.transform.localScale = Vector3.one * (tileSize * 0.2f);
+                    view.transform.localScale = Vector3.one * (hexSize * 0.25f);
                     view.GetComponent<Renderer>().material.color = Color.white;
                     _citizenViews.Add(citizen, view);
                 }
 
+                var worldPos = HexGridMath.HexToWorldPosition(citizen.RoadCoord, hexSize);
                 view.SetActive(true);
-                view.transform.position = new Vector3(citizen.RoadX * tileSize, 0.15f, citizen.RoadY * tileSize);
+                view.transform.position = new Vector3(worldPos.x, 0.2f, worldPos.z);
                 visibleCount++;
             }
 
@@ -235,39 +261,34 @@ namespace CityBuilder.Unity
             }
         }
 
-        private void OnGUI()
+        private static Mesh CreatePointyTopHexMesh(float size)
         {
-            GUILayout.BeginArea(new Rect(10, 10, 610, 90), "Build Menu", GUI.skin.window);
-            GUILayout.Label($"Active tool: {_activeTool}");
-            GUILayout.BeginHorizontal();
+            var mesh = new Mesh { name = "HexTile" };
 
-            DrawToolButton("Road", BuildTool.Road);
-            DrawToolButton("Residential", BuildTool.Residential);
-            DrawToolButton("Industrial", BuildTool.Industrial);
-            DrawToolButton("Commercial", BuildTool.Commercial);
-            DrawToolButton("Police", BuildTool.PoliceStation);
-            DrawToolButton("Fire", BuildTool.FireStation);
-            DrawToolButton("Hospital", BuildTool.Hospital);
+            var vertices = new Vector3[7];
+            var triangles = new int[18];
+            vertices[0] = Vector3.zero;
 
-            GUILayout.EndHorizontal();
-            GUILayout.Label("LPM: place selected tool on tile. Buildings require adjacent road.");
-            GUILayout.EndArea();
-        }
-
-        private void DrawToolButton(string label, BuildTool tool)
-        {
-            var previousColor = GUI.backgroundColor;
-            if (_activeTool == tool)
+            for (var i = 0; i < 6; i++)
             {
-                GUI.backgroundColor = Color.cyan;
+                var angleDeg = 60f * i - 30f;
+                var angleRad = Mathf.Deg2Rad * angleDeg;
+                vertices[i + 1] = new Vector3(size * Mathf.Cos(angleRad), 0f, size * Mathf.Sin(angleRad));
             }
 
-            if (GUILayout.Button(label, GUILayout.Height(30)))
+            for (var i = 0; i < 6; i++)
             {
-                _activeTool = tool;
+                var t = i * 3;
+                triangles[t] = 0;
+                triangles[t + 1] = i + 1;
+                triangles[t + 2] = i == 5 ? 1 : i + 2;
             }
 
-            GUI.backgroundColor = previousColor;
+            mesh.vertices = vertices;
+            mesh.triangles = triangles;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private static Color ResolveBuildingColor(BuildingType type)
@@ -284,20 +305,6 @@ namespace CityBuilder.Unity
             };
         }
 
-        private static BuildingType ConvertToolToBuildingType(BuildTool tool)
-        {
-            return tool switch
-            {
-                BuildTool.Residential => BuildingType.Residential,
-                BuildTool.Industrial => BuildingType.Industrial,
-                BuildTool.Commercial => BuildingType.Commercial,
-                BuildTool.PoliceStation => BuildingType.PoliceStation,
-                BuildTool.FireStation => BuildingType.FireStation,
-                BuildTool.Hospital => BuildingType.Hospital,
-                _ => BuildingType.Empty
-            };
-        }
-
         private void RunTick()
         {
             _simulation.Tick();
@@ -306,27 +313,5 @@ namespace CityBuilder.Unity
                 $"Crime: {_simulation.CrimeIndex:0.0} | FireRisk: {_simulation.FireRiskIndex:0.0} | Health: {_simulation.HealthIndex:0.0} | " +
                 $"Citizens: {_simulation.Citizens.Count} | Balance: {_simulation.Balance}");
         }
-
-#if ENABLE_INPUT_SYSTEM
-        private static bool IsPlacePressed()
-        {
-            return UnityEngine.InputSystem.Mouse.current?.leftButton.wasPressedThisFrame ?? false;
-        }
-
-        private static Vector2 GetPointerScreenPosition()
-        {
-            return UnityEngine.InputSystem.Mouse.current?.position.ReadValue() ?? Vector2.zero;
-        }
-#else
-        private static bool IsPlacePressed()
-        {
-            return Input.GetMouseButtonDown(0);
-        }
-
-        private static Vector2 GetPointerScreenPosition()
-        {
-            return Input.mousePosition;
-        }
-#endif
     }
 }
