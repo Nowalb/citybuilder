@@ -1,0 +1,8 @@
+1. Start from seed input -> terrain morph timelapse.
+2. Grid snap placement montage (residential/commercial/industry).
+3. Road network expansion with congestion overlay.
+4. Budget HUD drama: debt rises, taxes adjusted.
+5. Corruption decision popup: bribe accepted.
+6. Scandal event strikes, protests in UI.
+7. Recovery arc with tech unlock and stabilizing population.
+8. Final cinematic flyover of thriving city.
