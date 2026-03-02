@@ -1,0 +1,9 @@
+Sample Buildings Included:
+- residential_small
+- residential_medium
+- commercial_small
+- industrial_small
+- powerplant
+- park
+
+See Assets/Resources/ScriptableObjects/*.asset for editable Unity ScriptableObject YAML placeholders.

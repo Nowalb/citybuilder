@@ -1,56 +1,55 @@
-# City Builder MVP (Unity-ready)
+# CityBuilder Skeleton (Unity / C#)
 
-## Folder structure
-- `Assets/Scripts/Simulation` → pure C# simulation logic (no MonoBehaviour)
-- `Assets/Scripts/Unity` → Unity rendering/input/controllers
-- `Assets/Tests/EditMode` → NUnit EditMode tests
+Projekt szkieletu city-builder w namespace `CityCore` dla Unity LTS (2021.3+ / 2022.3+).
 
-## Hex architecture (axial)
-- Grid uses `HexCoord(Q, R)` axial coordinates.
-- Grid storage is `Dictionary<HexCoord, Tile>`.
-- Neighbor system supports 6 directions.
-- Foundations included:
-  - `Distance(HexCoord a, HexCoord b)`
-  - `GetTilesInRange(center, radius)`
-  - chunk bucket id via `HexGridMath.GetChunkId(...)`
+## Uruchomienie
+1. Otwórz folder projektu w Unity Hub.
+2. Otwórz scenę `Assets/Scenes/Main.unity`.
+3. Utwórz obiekt `GameManager` i dodaj komponenty:
+   - `GameManager`, `TickScheduler`, `TerrainSystem`, `GridSystem`, `BuildingManager`,
+   - `RoadManager`, `EconomySystem`, `PopulationSystem`, `CorruptionSystem`, `TechManager`, `EventSystem`, `SaveLoadSystem`, `UIManager`.
+4. Podepnij referencje w inspectorze (zgodnie z polami `[SerializeField]`).
+5. Uruchom Play.
 
-## Terrain generation
-- Map starts as terrain-only (no initial roads/buildings).
-- Map shape is a true axial hexagon with side length 30 hexes (configurable in `SimulationBootstrap`).
-- Terrain is generated deterministically from seed in simulation layer.
-- Terrain types: `Grass`, `Forest`, `Hill`, `Water`.
-- Water tiles block roads and buildings.
+## Seed / Heightmap
+- Terrain generuje się przez `TerrainSystem.Generate(seed, width, height, scale)`.
+- Seed możesz skopiować przyciskiem `Export Seed` (clipboard).
 
-## Auto city growth
-- Simulation starts from empty map and grows automatically:
-  - first road appears near map center,
-  - roads expand from existing roads,
-  - buildings spawn near roads.
-- Building placement still respects road adjacency rule.
+## Save / Load
+- JSON zapisuje się do `Application.persistentDataPath/city_save.json`.
+- UI zawiera przyciski Save i Load (wymagają przypięcia Buttonów).
 
-## Math used (pointy-top hex)
-- `HexToWorldPosition`:
-  - `x = size * sqrt(3) * (q + r/2)`
-  - `z = size * 3/2 * r`
-- `WorldToHex`:
-  - inverse axial projection + cube/axial rounding
+## Wygenerowane pliki
+- `Assets/Scripts/Game/Core/GameManager.cs`
+- `Assets/Scripts/Game/Core/TickScheduler.cs`
+- `Assets/Scripts/Game/World/TerrainSystem.cs`
+- `Assets/Scripts/Game/World/GridSystem.cs`
+- `Assets/Scripts/Game/Construction/PlacementValidator.cs`
+- `Assets/Scripts/Game/Construction/BuildingManager.cs`
+- `Assets/Scripts/Game/Data/BuildingData.cs`
+- `Assets/Scripts/Game/Data/TechTreeData.cs`
+- `Assets/Scripts/Game/Roads/RoadManager.cs`
+- `Assets/Scripts/Game/Economy/EconomySystem.cs`
+- `Assets/Scripts/Game/Population/PopulationSystem.cs`
+- `Assets/Scripts/Game/Politics/CorruptionSystem.cs`
+- `Assets/Scripts/Game/Events/EventSystem.cs`
+- `Assets/Scripts/Game/Tech/TechManager.cs`
+- `Assets/Scripts/Game/SaveLoad/SaveLoadSystem.cs`
+- `Assets/Scripts/UI/UIManager.cs`
+- `Assets/Scripts/Utils/SerializableHelpers.cs`
+- `Assets/Scenes/Main.unity`
+- `Assets/ScriptableObjects/SampleBuildings.asset`
+- `Assets/Resources/ScriptableObjects/*.asset`
+- `Assets/Prefabs/*.prefab`
+- `Assets/Tests/EditMode/TickSchedulerTests.cs`
+- `Assets/Tests/EditMode/GridRoundtripTests.cs`
+- `Assets/Tests/EditMode/SaveLoadSystemTests.cs`
+- `Assets/ArtPlaceholders/readme.txt`
+- `devchecklist.md`
+- `trailer_shots.txt`
+- `limits.txt`
 
-## How to run
-1. Create/open Unity 6 URP project.
-2. Copy `Assets` folder from this repo into your Unity project.
-3. Create empty GameObject named `Simulation`.
-4. Add `SimulationBootstrap` + `HexGridRenderer` to that object.
-5. (Optional) add `PlacementController` for manual placement + drag painting.
-6. Add `CityCameraController` to Main Camera.
-7. Press Play.
-
-## Stability notes
-- Simulation layer is Unity-free.
-- Placement checks `EventSystem.current.IsPointerOverGameObject()`.
-- If EventSystem is missing, `PlacementController` creates one.
-- Hex renderer uses shared mesh/materials to limit allocations.
-
-
-## Manual placement UI
-- Simple bottom UI lets you choose: Road, Residential, Industrial, Commercial, Police, Fire, Hospital.
-- Click-and-drag paints across all crossed hexes (road drag and other tools as well).
+## Roadmap
+- Podmiana placeholder art na finalny low-poly pack.
+- Rozbudowa BuildTool i zoning UI.
+- Balans ekonomii i chain eventów.

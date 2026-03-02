@@ -1,0 +1,4 @@
+Limitations:
+1) Unity .unity/.prefab/.asset YAML files were generated as lightweight placeholders and may require opening/re-saving in Unity Editor to finalize references and script GUID bindings.
+2) BuildTool panel wiring in UI requires Unity Canvas/Button/Text objects assigned in Inspector.
+3) Sample building ScriptableObjects in Resources are template placeholders; create real BuildingData assets via Create menu and assign prefabs.

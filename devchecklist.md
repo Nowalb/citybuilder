@@ -1,0 +1,11 @@
+# Dev Checklist (next months)
+- [ ] Replace placeholder prefabs with final low-poly kit
+- [ ] Add zoning tool and area painting UX
+- [ ] Improve road graph path costs and districts
+- [ ] Add service coverage overlays (power/water/safety)
+- [ ] Expand event chains with choices and outcomes
+- [ ] Balance economy and tax elasticity per class
+- [ ] Introduce jobs and unemployment pipelines
+- [ ] Optimize terrain mesh chunks and culling
+- [ ] Add autosave and save version migration
+- [ ] Add localization and accessibility controls
